@@ -1,6 +1,6 @@
 package cn.redture.campus.util;
 
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import java.util.regex.Pattern;
 

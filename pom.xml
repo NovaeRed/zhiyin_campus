@@ -25,8 +25,8 @@
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <sentinel.version>1.8.8</sentinel.version>
-        <langchain4j.version>1.0.0-beta5</langchain4j.version>
-        <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <langchain4j.version>1.14.1</langchain4j.version>
+        <langchain4j-integration.version>1.14.1-beta24</langchain4j-integration.version>
     </properties>
 
     <dependencyManagement>
@@ -39,9 +39,9 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud.version}</version>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -144,41 +144,34 @@
         </dependency>
 
         <!-- ========== LangChain4j 核心 ========== -->
-        <!-- Spring Boot 3.5 专用 Starter（自动配置） -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-spring-boot-starter</artifactId>
-            <version>${langchain4j.version}</version>
+            <artifactId>langchain4j</artifactId>
         </dependency>
 
         <!-- pgvector 向量存储集成（MVP 期） -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-pgvector</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>${langchain4j-integration.version}</version>
         </dependency>
 
         <!-- Milvus 集成（生产期预留） -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-milvus</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>${langchain4j-integration.version}</version>
             <optional>true</optional>
         </dependency>
 
-        <!-- DashScope/Qwen 大模型适配器（国内合规） -->
+        <!-- DashScope/Qwen 大模型适配器 -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-community-dashscope</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>${langchain4j-integration.version}</version>
         </dependency>
 
         <!-- 文档解析器（Tika 集成） -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-document-parser-apache-tika</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
 
         <!-- ========== 文档解析增强 ========== -->
         <dependency>
@@ -226,16 +219,16 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
         </dependency>
     </dependencies>
 
@@ -278,6 +271,19 @@
     </build>
 
     <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <!-- 如需最新 beta 版本，可添加 Sonatype Snapshots -->
+        <repository>
+            <id>sonatype-snapshots</id>
+            <name>Sonatype Snapshots</name>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
         <!-- Spring Milestones-->
         <repository>
             <id>spring-milestones</id>

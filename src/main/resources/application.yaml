@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: zhiyin-campus
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
   datasource:
     url: jdbc:postgresql://192.168.123.128/zhiyin-campus
     username: root
@@ -37,3 +41,30 @@ jwt:
   secret: ai-social-project-secret-key-for-jwt-authentication-hs256-20240520
   access_token_expiration: 900 # 15 minutes in seconds
   refresh_token_expiration_seconds: 604800 # 7 days in seconds
+
+campus:
+  rag:
+    storage:
+      provider: pgvector
+      local-file-dir: ./data/knowledge
+    qwen:
+      api-key: ${Qwen-Api:}
+      base-url: ${DASHSCOPE_BASE_URL:}
+      chat-model: deepseek-v4-flash
+      embedding-model: text-embedding-v4
+      embedding-dimension: 1024
+      temperature: 0.2
+      top-p: 0.8
+      max-tokens: 1600
+    chunking:
+      strategy: parent_child
+      chunk-size: 800
+      overlap: 120
+      parent-size: 1200
+      child-size: 400
+    retrieval:
+      vector-top-k: 20
+      bm25-top-k: 20
+      final-top-k: 5
+      rrf-k: 60
+      rerank-threshold: 0.1

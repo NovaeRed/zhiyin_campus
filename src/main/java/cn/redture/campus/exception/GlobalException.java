@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 全局异常处理器
@@ -38,6 +39,20 @@ public class GlobalException {
         String errorMessage = e.getBindingResult().getAllErrors().getFirst().getDefaultMessage();
         log.warn("参数校验失败: {}", errorMessage);
         return RestResult.badRequest(errorMessage);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public RestResult<Void> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("请求参数或上传内容无效: {}", e.getMessage());
+        return RestResult.badRequest(e.getMessage());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public RestResult<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        log.warn("上传文件超过大小限制: {}", e.getMessage());
+        return RestResult.badRequest("上传文件超过大小限制");
     }
 
     /**
