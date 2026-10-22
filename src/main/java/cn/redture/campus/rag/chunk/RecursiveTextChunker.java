@@ -30,7 +30,7 @@ public class RecursiveTextChunker implements DocumentChunker {
                         .content(piece)
                         .level("child")
                         .tokenCount(estimateTokens(piece))
-                        .chunkType("text")
+                        .chunkType(TableRowBlocks.contains(piece) ? "table" : "text")
                         .build());
             }
         }
@@ -38,6 +38,14 @@ public class RecursiveTextChunker implements DocumentChunker {
     }
 
     static List<String> splitByStructure(String text, int maxLength) {
+        if (TableRowBlocks.contains(text)) {
+            List<String> rows = new ArrayList<>();
+            for (var piece : TableRowBlocks.pieces(text)) {
+                if (piece.table()) rows.add(piece.text());
+                else rows.addAll(splitByStructure(piece.text(), maxLength));
+            }
+            return rows;
+        }
         List<String> result = new ArrayList<>();
         String[] paragraphs = text.split("\\n\\s*\\n");
         StringBuilder current = new StringBuilder();
@@ -65,6 +73,14 @@ public class RecursiveTextChunker implements DocumentChunker {
     }
 
     static List<String> splitWithOverlap(String text, int maxLength, int overlap) {
+        if (TableRowBlocks.contains(text)) {
+            List<String> rows = new ArrayList<>();
+            for (var piece : TableRowBlocks.pieces(text)) {
+                if (piece.table()) rows.add(piece.text());
+                else rows.addAll(splitWithOverlap(piece.text(), maxLength, overlap));
+            }
+            return rows;
+        }
         List<String> result = new ArrayList<>();
         String source = text.trim();
         if (source.length() <= maxLength) {
@@ -88,7 +104,8 @@ public class RecursiveTextChunker implements DocumentChunker {
     }
 
     static String normalize(String text) {
-        return text == null ? "" : text.replace("\r\n", "\n").replace('\r', '\n').trim();
+        return text == null ? "" : text.replace("\r\n", "\n").replace('\r', '\n')
+                .replaceAll("(?m)^[\\t ]*\\[PDF_PAGE \\d+][\\t ]*$", "").trim();
     }
 
     private static List<String> splitSentences(String text, int maxLength) {

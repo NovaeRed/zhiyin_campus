@@ -52,3 +52,19 @@ nbattrs/
 .codex/
 
 data/
+
+# Local credentials and runtime configuration
+.env
+.env.*
+application-local.yaml
+application-local.yml
+src/main/resources/application-local.yaml
+src/main/resources/application-local.yml
+
+# Local-only verification material
+/src/test/
+/scripts/
+/doc/evaluation/
+/doc/pgvector-test-report.md
+/logs/
+/AGENTS.md

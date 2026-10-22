@@ -15,9 +15,13 @@ public class RetrievedChunk {
     private Long parentId;
     private String title;
     private String content;
+    private String matchedContent;
+    private Integer targetGrade;
     private String metadata;
     private Double vectorScore;
     private Double bm25Score;
     private Double fusedScore;
+    private Double normalizedFusedScore;
+    private Double evidenceScore;
     private Double rerankScore;
 }

@@ -3,6 +3,9 @@ package cn.redture.campus.rag.repository;
 import cn.redture.campus.mapper.KnowledgeMapper;
 import cn.redture.campus.rag.retrieval.RetrievedChunk;
 import cn.redture.campus.rag.retrieval.QueryTextNormalizer;
+import cn.redture.campus.rag.retrieval.AcademicScope;
+import cn.redture.campus.rag.retrieval.CurriculumDocument;
+import cn.redture.campus.rag.retrieval.CurriculumRoute;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Repository;
@@ -80,12 +83,42 @@ public class KnowledgeRepository {
         knowledgeMapper.completeQuery(queryId, confidence);
     }
 
-    public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade, int limit) {
-        return knowledgeMapper.searchByVector(toVector(embedding), targetMajor, targetGrade, limit);
+    public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade,
+                                               String targetCohort, int limit) {
+        return searchByVector(embedding, targetMajor, targetGrade, targetCohort, limit, null);
     }
 
-    public List<RetrievedChunk> searchByKeyword(String query, String targetMajor, Integer targetGrade, int limit) {
-        return knowledgeMapper.searchByKeyword(query, QueryTextNormalizer.keywords(query), targetMajor, targetGrade, limit);
+    public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade,
+                                               String targetCohort, int limit, List<Long> docIds) {
+        return knowledgeMapper.searchByVector(toVector(embedding), targetMajor, targetGrade, targetCohort, limit, docIds,
+                CurriculumRoute.excludedMajors(targetMajor, targetMajor == null ? List.of() : activeCurricula()));
+    }
+
+    public List<CurriculumDocument> activeCurricula() {
+        return knowledgeMapper.activeCurricula();
+    }
+
+    public List<RetrievedChunk> curriculumCourseChunks(Long docId) {
+        return knowledgeMapper.curriculumCourseChunks(docId);
+    }
+
+    public List<RetrievedChunk> searchByKeyword(String query, String targetMajor, Integer targetGrade,
+                                                String targetCohort, int limit) {
+        return searchByKeyword(query, targetMajor, targetGrade, targetCohort, limit, null);
+    }
+
+    public List<RetrievedChunk> searchByKeyword(String query, String targetMajor, Integer targetGrade,
+                                                String targetCohort, int limit, List<Long> docIds) {
+        AcademicScope scope = AcademicScope.resolve(query, targetGrade, targetCohort);
+        var catalog = activeCurricula();
+        String major = CurriculumRoute.effectiveMajor(query, targetMajor, catalog);
+        var route = CurriculumRoute.resolve(query, scope, catalog);
+        if (route.unavailable()) return List.of();
+        // Explicit query scope can narrow a caller-supplied allow-list, never widen it.
+        List<Long> allowed = route.docIds() == null ? docIds : docIds == null ? route.docIds()
+                : docIds.stream().filter(route.docIds()::contains).toList();
+        return knowledgeMapper.searchByKeyword(query, QueryTextNormalizer.keywords(query), major, scope.grade(),
+                scope.cohort(), limit, allowed, CurriculumRoute.excludedMajors(major, catalog));
     }
 
     public void insertRetrievalTrace(Long queryId, List<RetrievedChunk> initial, List<RetrievedChunk> reranked,

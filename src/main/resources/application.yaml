@@ -9,15 +9,15 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
   datasource:
-    url: jdbc:postgresql://192.168.123.128/zhiyin-campus
-    username: root
-    password: 123456
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/zhiyin-campus}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   data:
     redis:
-      host: 192.168.123.128
+      host: ${REDIS_HOST:localhost}
       port: 6379
-      password: 123456
+      password: ${REDIS_PASSWORD:}
       lettuce:
         pool:
           max-active: 10
@@ -33,12 +33,12 @@ mybatis-plus:
     default-enum-type-handler: cn.redture.campus.util.PgEnumTypeHandler # 自定义枚举处理器
 logging:
   level:
-    cn.redture: debug
+    cn.redture: info
   file:
     path: ./logs
 
 jwt:
-  secret: ai-social-project-secret-key-for-jwt-authentication-hs256-20240520
+  secret: ${JWT_SECRET}
   access_token_expiration: 900 # 15 minutes in seconds
   refresh_token_expiration_seconds: 604800 # 7 days in seconds
 
@@ -50,8 +50,8 @@ campus:
     qwen:
       api-key: ${Qwen-Api:}
       base-url: ${DASHSCOPE_BASE_URL:}
-      chat-model: deepseek-v4-flash
-      embedding-model: text-embedding-v4
+      chat-model: qwen3.7-flash
+      embedding-model: qwen3.7-text-embedding-flash
       embedding-dimension: 1024
       temperature: 0.2
       top-p: 0.8

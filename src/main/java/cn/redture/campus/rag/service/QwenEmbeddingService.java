@@ -1,5 +1,6 @@
 package cn.redture.campus.rag.service;
 
+import cn.redture.campus.config.RagProperties;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -14,16 +15,18 @@ import java.util.List;
 public class QwenEmbeddingService {
 
     private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
+    private final RagProperties properties;
 
-    public QwenEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider) {
+    public QwenEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider, RagProperties properties) {
         this.embeddingModelProvider = embeddingModelProvider;
+        this.properties = properties;
     }
 
     public float[] embedQuery(String text) {
         if (!StringUtils.hasText(text)) {
             throw new IllegalArgumentException("Embedding query cannot be blank");
         }
-        return embeddingModel().embed(text).content().vector();
+        return validateDimension(embeddingModel().embed(text).content().vector());
     }
 
     public List<float[]> embedDocuments(List<String> texts) {
@@ -37,10 +40,22 @@ public class QwenEmbeddingService {
         List<TextSegment> segments = validTexts.stream().map(TextSegment::from).toList();
         return embeddingModel().embedAll(segments).content().stream()
                 .map(Embedding::vector)
+                .map(this::validateDimension)
                 .toList();
     }
 
     private EmbeddingModel embeddingModel() {
         return embeddingModelProvider.getObject();
+    }
+
+    private float[] validateDimension(float[] vector) {
+        int expected = properties.getQwen().getEmbeddingDimension();
+        if (vector == null || vector.length != expected) {
+            throw new IllegalStateException("Embedding dimension mismatch. model="
+                    + properties.getQwen().getEmbeddingModel()
+                    + ", expected=" + expected
+                    + ", actual=" + (vector == null ? 0 : vector.length));
+        }
+        return vector;
     }
 }

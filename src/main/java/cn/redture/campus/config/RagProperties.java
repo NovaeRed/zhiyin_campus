@@ -23,6 +23,9 @@ public class RagProperties {
         private String apiKey;
         private String baseUrl;
         private String chatModel = "qwen-plus";
+        /**
+         * 稠密语义 embedding 模型，默认的 text-embedding-v4 适合中文校园政策 RAG 场景。
+         */
         private String embeddingModel = "text-embedding-v4";
         private Integer embeddingDimension = 1024;
         private Float temperature = 0.2f;
@@ -46,5 +49,8 @@ public class RagProperties {
         private int finalTopK = 5;
         private int rrfK = 60;
         private double rerankThreshold = 0.1;
+        private double minimumEvidenceCoverage = 0.1;
+        private boolean queryPlanningEnabled = true;
+        private int maxExpandedQueries = 2;
     }
 }

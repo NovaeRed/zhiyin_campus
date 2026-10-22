@@ -4,6 +4,7 @@ import cn.redture.campus.rag.repository.DocChunkInsert;
 import cn.redture.campus.rag.repository.KnowledgeDocumentInsert;
 import cn.redture.campus.rag.repository.RagQueryInsert;
 import cn.redture.campus.rag.retrieval.RetrievedChunk;
+import cn.redture.campus.rag.retrieval.CurriculumDocument;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -15,6 +16,28 @@ import java.util.List;
 
 @Mapper
 public interface KnowledgeMapper {
+
+    @Select("""
+            SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
+              COALESCE(p.content,c.content) AS content,c.content AS "matchedContent",c.target_grade AS "targetGrade",
+              c.metadata::text AS metadata
+            FROM doc_chunks c JOIN knowledge_docs d ON d.id=c.doc_id
+            LEFT JOIN doc_chunks p ON p.id=c.parent_id AND p.doc_id=c.doc_id AND p.chunk_level='parent'
+            WHERE c.doc_id=#{docId} AND d.status='active' AND c.doc_status='active' AND c.chunk_level='child'
+              AND c.metadata->>'chunk_type'='table'
+            ORDER BY c.id
+            """)
+    List<RetrievedChunk> curriculumCourseChunks(@Param("docId") Long docId);
+
+    @Select("""
+            SELECT d.id AS "docId", d.title, MIN(c.target_grade) AS "targetGrade", MIN(c.target_major) AS "targetMajor"
+            FROM knowledge_docs d JOIN doc_chunks c ON c.doc_id = d.id
+            WHERE d.status = 'active' AND c.doc_status = 'active' AND c.chunk_level = 'child'
+              AND c.target_grade IS NOT NULL
+            GROUP BY d.id HAVING COUNT(DISTINCT c.target_grade) = 1 AND COUNT(DISTINCT c.target_major) <= 1
+            ORDER BY d.id
+            """)
+    List<CurriculumDocument> activeCurricula();
 
     @Insert("""
             INSERT INTO knowledge_docs(title, file_path, file_type, version, status, metadata, chunk_strategy, created_by)
@@ -60,39 +83,63 @@ public interface KnowledgeMapper {
     int completeQuery(@Param("queryId") Long queryId, @Param("confidence") double confidence);
 
     @Select("""
+            <script>
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
-                   COALESCE(p.content, c.content) AS content,
+                   COALESCE(p.content, c.content) AS content, c.content AS "matchedContent", c.target_grade AS "targetGrade",
                    COALESCE(p.metadata, c.metadata)::text AS metadata,
-                   1 - (c.embedding <=> #{embeddingVector}::vector) AS "vectorScore"
+                   1 - (c.embedding &lt;=> #{embeddingVector}::vector) AS "vectorScore"
             FROM doc_chunks c
             JOIN knowledge_docs d ON d.id = c.doc_id
             LEFT JOIN doc_chunks p ON p.id = c.parent_id
             WHERE c.doc_status = 'active'
+              AND d.status = 'active'
               AND c.chunk_level = 'child'
               AND c.embedding IS NOT NULL
+              AND c.content !~ '^[[:space:]]*[[]PDF_PAGE[[:space:]]+[0-9]+[]][[:space:]]*$'
+              <if test="excludedDocIds != null and excludedDocIds.size() > 0">
+                AND d.id NOT IN <foreach collection="excludedDocIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              </if>
+              <if test="docIds != null">
+                <choose>
+                  <when test="docIds.size() > 0">
+                    AND d.id IN <foreach collection="docIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                  </when>
+                  <otherwise>AND 1 = 0</otherwise>
+                </choose>
+              </if>
               AND (CAST(#{targetMajor,jdbcType=VARCHAR} AS varchar) IS NULL
                    OR c.target_major IS NULL OR c.target_major = #{targetMajor,jdbcType=VARCHAR})
               AND (CAST(#{targetGrade,jdbcType=INTEGER} AS integer) IS NULL
                    OR c.target_grade IS NULL OR c.target_grade = #{targetGrade,jdbcType=INTEGER})
-            ORDER BY c.embedding <=> #{embeddingVector}::vector
+              AND (CAST(#{targetCohort,jdbcType=VARCHAR} AS varchar) IS NULL
+                   OR c.metadata->>'target_cohort' IS NULL
+                   OR c.metadata->>'target_cohort' = #{targetCohort,jdbcType=VARCHAR})
+            ORDER BY c.embedding &lt;=> #{embeddingVector}::vector, c.id
             LIMIT #{limit}
+            </script>
             """)
     List<RetrievedChunk> searchByVector(@Param("embeddingVector") String embeddingVector,
                                         @Param("targetMajor") String targetMajor,
                                         @Param("targetGrade") Integer targetGrade,
-                                        @Param("limit") int limit);
+                                        @Param("targetCohort") String targetCohort,
+                                        @Param("limit") int limit, @Param("docIds") List<Long> docIds,
+                                        @Param("excludedDocIds") List<Long> excludedDocIds);
 
     @Select("""
             <script>
+            WITH scored AS (
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
-                   COALESCE(p.content, c.content) AS content,
+                   COALESCE(p.content, c.content) AS content, c.content AS "matchedContent", c.target_grade AS "targetGrade",
                    COALESCE(p.metadata, c.metadata)::text AS metadata,
                    (
                      ts_rank_cd(to_tsvector('simple', c.content), plainto_tsquery('simple', #{query}))
                      <if test="keywords != null and keywords.size() > 0">
                        +
                        <foreach collection="keywords" item="keyword" separator="+">
-                         CASE WHEN c.content ILIKE '%' || #{keyword} || '%' THEN 1.0 ELSE 0.0 END
+                         (CASE WHEN c.content ILIKE '%' || #{keyword} || '%'
+                               THEN length(#{keyword}) ELSE 0.0 END
+                          + CASE WHEN d.title ILIKE '%' || #{keyword} || '%'
+                                 THEN length(#{keyword}) * 0.5 ELSE 0.0 END)
                        </foreach>
                      </if>
                    ) AS "bm25Score"
@@ -100,11 +147,27 @@ public interface KnowledgeMapper {
             JOIN knowledge_docs d ON d.id = c.doc_id
             LEFT JOIN doc_chunks p ON p.id = c.parent_id
             WHERE c.doc_status = 'active'
+              AND d.status = 'active'
               AND c.chunk_level = 'child'
+              AND c.content !~ '^[[:space:]]*[[]PDF_PAGE[[:space:]]+[0-9]+[]][[:space:]]*$'
+              <if test="excludedDocIds != null and excludedDocIds.size() > 0">
+                AND d.id NOT IN <foreach collection="excludedDocIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              </if>
+              <if test="docIds != null">
+                <choose>
+                  <when test="docIds.size() > 0">
+                    AND d.id IN <foreach collection="docIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                  </when>
+                  <otherwise>AND 1 = 0</otherwise>
+                </choose>
+              </if>
               AND (CAST(#{targetMajor,jdbcType=VARCHAR} AS varchar) IS NULL
                    OR c.target_major IS NULL OR c.target_major = #{targetMajor,jdbcType=VARCHAR})
               AND (CAST(#{targetGrade,jdbcType=INTEGER} AS integer) IS NULL
                    OR c.target_grade IS NULL OR c.target_grade = #{targetGrade,jdbcType=INTEGER})
+              AND (CAST(#{targetCohort,jdbcType=VARCHAR} AS varchar) IS NULL
+                   OR c.metadata->>'target_cohort' IS NULL
+                   OR c.metadata->>'target_cohort' = #{targetCohort,jdbcType=VARCHAR})
               AND (to_tsvector('simple', c.content) @@ plainto_tsquery('simple', #{query})
                    <if test="keywords != null and keywords.size() > 0">
                      OR
@@ -112,7 +175,14 @@ public interface KnowledgeMapper {
                        c.content ILIKE '%' || #{keyword} || '%'
                      </foreach>
                    </if>)
-            ORDER BY "bm25Score" DESC
+            ), ranked AS (
+                SELECT scored.*, ROW_NUMBER() OVER (
+                    PARTITION BY "docId", COALESCE("parentId", "chunkId")
+                    ORDER BY "bm25Score" DESC, "chunkId") AS context_rank
+                FROM scored
+            )
+            SELECT * FROM ranked WHERE context_rank = 1
+            ORDER BY "bm25Score" DESC, "chunkId"
             LIMIT #{limit}
             </script>
             """)
@@ -120,7 +190,9 @@ public interface KnowledgeMapper {
                                          @Param("keywords") List<String> keywords,
                                          @Param("targetMajor") String targetMajor,
                                          @Param("targetGrade") Integer targetGrade,
-                                         @Param("limit") int limit);
+                                         @Param("targetCohort") String targetCohort,
+                                         @Param("limit") int limit, @Param("docIds") List<Long> docIds,
+                                         @Param("excludedDocIds") List<Long> excludedDocIds);
 
     @Insert("""
             INSERT INTO retrieval_traces(query_id, initial_retrieval, reranked_result, selected_chunk_ids,

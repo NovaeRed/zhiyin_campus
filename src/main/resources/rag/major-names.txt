@@ -1,0 +1,5 @@
+# Campus major names for routing, independent of active knowledge documents.
+# One canonical major per line. Extend this registry when adding campus majors.
+计算机科学与技术
+数学与应用数学
+信息与计算科学
