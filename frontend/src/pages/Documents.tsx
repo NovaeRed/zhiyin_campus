@@ -6,7 +6,7 @@ import Icon from '../components/Icon';
 import DocumentOriginal from '../components/DocumentOriginal';
 import ragService from '../services/rag';
 import type { UploadResult } from '../services/rag';
-import { getDocuments, getDocument, getChunks, setDocumentStatus, editDocument, metadata, dateText } from '../services/portal';
+import { getDocuments, getDocument, getChunks, setDocumentStatus, deleteDocument, editDocument, metadata, dateText } from '../services/portal';
 import type { DocumentRecord, ChunkRecord, Page } from '../services/portal';
 import { errorMessage } from '../services/api';
 const statuses: Record<string, { label: string; color: string }> = { pending: { label: '待处理', color: 'default' }, processing: { label: '入库中', color: 'processing' }, active: { label: '已启用', color: 'success' }, deprecated: { label: '已停用', color: 'default' }, failed: { label: '入库失败', color: 'error' } };
@@ -16,6 +16,7 @@ export default function DocumentsPage() {
  const [form] = Form.useForm<UploadValues>();
  const [editForm] = Form.useForm<UploadValues>();
  const [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [editError, setEditError] = useState('');
+ const [deletingId, setDeletingId] = useState<number>();
  const [data, setData] = useState<Page<DocumentRecord>>(); const [page, setPage] = useState(1); const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [revision, setRevision] = useState(0);
  const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [uploadOpen, setUploadOpen] = useState(false); const [file, setFile] = useState<UploadFile>(); const [uploading, setUploading] = useState(false); const [uploadResult, setUploadResult] = useState<UploadResult>(); const [uploadError, setUploadError] = useState('');
  const [detailId, setDetailId] = useState<number>(); const [detail, setDetail] = useState<DocumentRecord>(); const [chunks, setChunks] = useState<Page<ChunkRecord>>(); const [chunkPage, setChunkPage] = useState(1); const [detailError, setDetailError] = useState(''); const [detailLoading, setDetailLoading] = useState(false); const [changingId, setChangingId] = useState<number>();
@@ -36,6 +37,15 @@ export default function DocumentsPage() {
   finally { setUploading(false); }
  }
  async function changeStatus(doc: DocumentRecord) { setChangingId(doc.id); try { await setDocumentStatus(doc.id, doc.status === 'active' ? 'deprecated' : 'active'); message.success('文档状态已更新'); setRevision(v => v + 1); } catch (e) { message.error(errorMessage(e)); } finally { setChangingId(undefined); } }
+ async function removeDocument(doc: DocumentRecord) {
+  if (deletingId !== undefined) return;
+  setDeletingId(doc.id);
+  try { await deleteDocument(doc.id); message.success('文档已删除');
+   if (detailId === doc.id) { setDetailId(undefined); setDetail(undefined); setChunks(undefined); setEditing(false); }
+   if (data?.items.length === 1 && page > 1) setPage(value => value - 1);
+   setRevision(value => value + 1);
+  } catch (e) { message.error(errorMessage(e)); } finally { setDeletingId(undefined); }
+ }
  function openEdit() {
   if (!detail) return;
   const values = metadata(detail.metadata);
@@ -61,7 +71,7 @@ export default function DocumentsPage() {
  { title: '状态', dataIndex: 'status', render: statusTag },
  { title: '切片', render: (_, doc: DocumentRecord) => <span className="muted-text">{doc.childChunks} 子块 / {doc.parentChunks} 父块</span> },
  { title: '创建时间', dataIndex: 'createdAt', render: value => <span className="muted-text">{dateText(value)}</span> },
- { title: '操作', width: 145, render: (_, doc: DocumentRecord) => <Space><Button type="link" size="small" onClick={() => { setDetailId(doc.id); setChunkPage(1); }}>详情</Button>{['active', 'deprecated'].includes(doc.status) && <Popconfirm title={doc.status === 'active' ? '停用这份文档？' : '重新启用这份文档？'} description={doc.status === 'active' ? '该文档及其切片将退出后续问答检索。' : '该文档将重新参与问答检索，请确认版本有效。'} onConfirm={() => changeStatus(doc)}><Button type="link" size="small" danger={doc.status === 'active'} loading={changingId === doc.id}>{doc.status === 'active' ? '停用' : '启用'}</Button></Popconfirm>}</Space> },
+ { title: '操作', width: 210, render: (_, doc: DocumentRecord) => <Space><Button type="link" size="small" disabled={deletingId === doc.id} onClick={() => { setDetailId(doc.id); setChunkPage(1); }}>详情</Button>{['active', 'deprecated'].includes(doc.status) && <Popconfirm title={doc.status === 'active' ? '停用这份文档？' : '重新启用这份文档？'} description={doc.status === 'active' ? '该文档及其切片将退出后续问答检索。' : '该文档将重新参与问答检索，请确认版本有效。'} onConfirm={() => changeStatus(doc)}><Button type="link" size="small" disabled={deletingId === doc.id} danger={doc.status === 'active'} loading={changingId === doc.id}>{doc.status === 'active' ? '停用' : '启用'}</Button></Popconfirm>}<Popconfirm title="删除这份文档？" description="删除后将从列表移除并停止参与检索；历史引用和原始文件保留。" okText="删除文档" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => removeDocument(doc)}><Button type="link" size="small" danger loading={deletingId === doc.id} disabled={changingId === doc.id || ['pending', 'processing'].includes(doc.status)}>删除</Button></Popconfirm></Space> },
  ]} /> }<p className="table-scroll-hint">左右滑动表格，可查看文档状态与操作。</p></section></div>
  <Drawer title="添加知识文档" open={uploadOpen} width="min(580px, 100vw)" destroyOnHidden onClose={() => { if (!uploading) setUploadOpen(false); }} closable={!uploading} maskClosable={!uploading} keyboard={!uploading}>
  {uploadResult && <Alert type="success" showIcon title="文档已成功入库" description={`ID ${uploadResult.docId} · ${uploadResult.title} · ${uploadResult.childChunks} 个子块 / ${uploadResult.parentChunks} 个父块`} style={{ marginBottom: 20 }} />}

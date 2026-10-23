@@ -30,6 +30,7 @@ public interface KnowledgeMapper {
             FROM doc_chunks c JOIN knowledge_docs d ON d.id=c.doc_id
             LEFT JOIN doc_chunks p ON p.id=c.parent_id AND p.doc_id=c.doc_id AND p.chunk_level='parent'
             WHERE c.doc_id=#{docId} AND d.status='active' AND c.doc_status='active' AND c.chunk_level='child'
+              AND d.metadata->>'deleted_at' IS NULL
               AND c.metadata->>'chunk_type'='table'
             ORDER BY c.id
             """)
@@ -39,6 +40,7 @@ public interface KnowledgeMapper {
             SELECT d.id AS "docId", d.title, MIN(c.target_grade) AS "targetGrade", MIN(c.target_major) AS "targetMajor"
             FROM knowledge_docs d JOIN doc_chunks c ON c.doc_id = d.id
             WHERE d.status = 'active' AND c.doc_status = 'active' AND c.chunk_level = 'child'
+              AND d.metadata->>'deleted_at' IS NULL
               AND c.target_grade IS NOT NULL
             GROUP BY d.id HAVING COUNT(DISTINCT c.target_grade) = 1 AND COUNT(DISTINCT c.target_major) <= 1
             ORDER BY d.id
@@ -102,6 +104,7 @@ public interface KnowledgeMapper {
             LEFT JOIN doc_chunks p ON p.id = c.parent_id
             WHERE c.doc_status = 'active'
               AND d.status = 'active'
+              AND d.metadata->>'deleted_at' IS NULL
               AND c.chunk_level = 'child'
               AND c.embedding IS NOT NULL
               AND c.content !~ '^[[:space:]]*[[]PDF_PAGE[[:space:]]+[0-9]+[]][[:space:]]*$'
@@ -157,6 +160,7 @@ public interface KnowledgeMapper {
             LEFT JOIN doc_chunks p ON p.id = c.parent_id
             WHERE c.doc_status = 'active'
               AND d.status = 'active'
+              AND d.metadata->>'deleted_at' IS NULL
               AND c.chunk_level = 'child'
               AND c.content !~ '^[[:space:]]*[[]PDF_PAGE[[:space:]]+[0-9]+[]][[:space:]]*$'
               <if test="excludedDocIds != null and excludedDocIds.size() > 0">

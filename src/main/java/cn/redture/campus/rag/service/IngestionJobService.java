@@ -52,6 +52,12 @@ public class IngestionJobService {
         catch(IOException failure){throw new IllegalStateException("Cannot stage uploaded file",failure);}
         long user=SecurityContextHolderUtil.getUserId();
         tx.executeWithoutResult(status -> {
+            // Serialize rebuild submission with document deletion before publishing the queued job.
+            if(rebuild!=null) {
+                var current=db.queryForList("SELECT version FROM knowledge_docs WHERE id=? AND metadata->>'deleted_at' IS NULL FOR UPDATE",rebuild);
+                if(current.isEmpty())throw new BaseException(HttpStatus.NOT_FOUND,"文档不存在或已删除","NOT_FOUND");
+                if(request.getVersion().equals(current.getFirst().get("version")))throw new BaseException(HttpStatus.BAD_REQUEST,"版本重建必须提供不同的新版本号","NEW_VERSION_REQUIRED");
+            }
             db.update("INSERT INTO app_ingestion_jobs(id,user_id,source_path,original_name,request,state,rebuild_of) VALUES (?,?,?,?,?::jsonb,'queued',?)",id,user,source.toString(),name,write(request),rebuild);
             audit.record("INGESTION_SUBMIT","ingestion_job",id,Map.of("fileName",name,"rebuild",rebuild==null?"":rebuild));
         });

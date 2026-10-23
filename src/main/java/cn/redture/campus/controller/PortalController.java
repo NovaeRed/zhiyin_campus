@@ -18,6 +18,8 @@ public class PortalController {
     }
     @GetMapping("/admin/documents/{id}")
     public RestResult<Document> document(@PathVariable("id") Long id) { return RestResult.success(service.document(id)); }
+    @DeleteMapping("/admin/documents/{id}")
+    public RestResult<Void> deleteDocument(@PathVariable("id") Long id) { service.deleteDocument(id); return RestResult.success(); }
     @GetMapping("/admin/documents/{id}/chunks")
     public RestResult<Page<Chunk>> chunks(@PathVariable("id") Long id, @RequestParam(name="page", defaultValue="1") int page,
             @RequestParam(name="pageSize", defaultValue="10") int pageSize) { return RestResult.success(service.chunks(id, page, pageSize)); }
