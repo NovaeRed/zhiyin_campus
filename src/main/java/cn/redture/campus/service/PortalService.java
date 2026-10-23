@@ -63,6 +63,17 @@ public class PortalService {
         Long userId = currentUser().getId(); validatePage(page, size);
         return new Page<>(portal.sessions(userId, size, (page - 1) * size), portal.countSessions(userId), page, size);
     }
+    @Transactional
+    public void deleteDocument(Long id) {
+        requireManager();
+        String current=portal.lockStatus(id);
+        if(current==null)missing();
+        if(Set.of("pending","processing").contains(current)||portal.hasLiveRebuild(id))
+            throw new BaseException(HttpStatus.CONFLICT,"文档正在入库或重建，请等待任务结束或取消后再删除","DOCUMENT_BUSY");
+        if(portal.deleteDocument(id,currentUser().getId())!=1)missing();
+        knowledge.updateChunksStatus(id,"deprecated");
+        audit.record("DOCUMENT_DELETE","document",id,java.util.Map.of("previousStatus",current,"sourceRetained",true));
+    }
     public Page<HistoryQuery> history(Long id, int page, int size) {
         Long userId = currentUser().getId(); validatePage(page, size);
         if (!portal.ownsSession(id, userId)) missing();

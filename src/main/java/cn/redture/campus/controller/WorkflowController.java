@@ -13,7 +13,6 @@ public class WorkflowController {
     public record Profile(String major,Integer grade,String cohort){}
     public record SessionEdit(String title,Boolean archived,String targetMajor,Integer targetGrade,String targetCohort,boolean setScope){}
     public record UserEdit(String role,Boolean active){}
-    public record DocumentEdit(String title,String version){}
     public record Feedback(int rating,String comment){}
     public record SessionDelete(List<Long> ids){}
     @GetMapping("/account/profile") public RestResult<?> profile(){return RestResult.success(management.profile());}
@@ -29,5 +28,5 @@ public class WorkflowController {
     @GetMapping("/admin/users") public RestResult<?> users(@RequestParam(name="page",defaultValue="1") int page,@RequestParam(name="pageSize",defaultValue="20") int pageSize){return RestResult.success(management.users(page,pageSize));}
     @PutMapping("/admin/users/{id}") public RestResult<?> user(@PathVariable("id") long id,@RequestBody UserEdit body){management.updateUser(id,body.role(),body.active());return RestResult.success();}
     @GetMapping("/admin/audit-events") public RestResult<?> audit(@RequestParam(name="page",defaultValue="1") int page,@RequestParam(name="pageSize",defaultValue="20") int pageSize){return RestResult.success(management.audits(page,pageSize));}
-    @PutMapping("/admin/documents/{id}") public RestResult<?> document(@PathVariable("id") long id,@RequestBody DocumentEdit body){management.editDocument(id,body.title(),body.version());return RestResult.success();}
+    @PutMapping("/admin/documents/{id}") public RestResult<?> document(@PathVariable("id") long id,@jakarta.validation.Valid @RequestBody cn.redture.campus.pojo.dto.DocumentEditRequestDTO body){management.editDocument(id,body);return RestResult.success();}
 }

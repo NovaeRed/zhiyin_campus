@@ -6,7 +6,7 @@ import java.util.List;
 
 @Mapper
 public interface PortalMapper {
-    String FILTER = " WHERE (#{search} = '' OR strpos(lower(d.title), lower(#{search})) > 0) AND (#{status} = '' OR d.status = #{status}) ";
+    String FILTER = " WHERE d.metadata->>'deleted_at' IS NULL AND (#{search} = '' OR strpos(lower(d.title), lower(#{search})) > 0) AND (#{status} = '' OR d.status = #{status}) ";
     String DOC_COLUMNS = "SELECT d.id, d.title, d.file_type AS \"fileType\", d.version, d.status, d.metadata::text AS metadata, "
             + "d.chunk_strategy::text AS \"chunkStrategy\", u.username AS \"createdByName\", d.created_at AS \"createdAt\", d.updated_at AS \"updatedAt\", "
             + "(SELECT COUNT(*) FROM doc_chunks c WHERE c.doc_id=d.id AND c.chunk_level='parent') AS \"parentChunks\", "
@@ -17,7 +17,7 @@ public interface PortalMapper {
     List<Document> documents(@Param("search") String search, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
     @Select("SELECT COUNT(*) FROM knowledge_docs d " + FILTER)
     long countDocuments(@Param("search") String search, @Param("status") String status);
-    @Select(DOC_COLUMNS + "WHERE d.id=#{id}")
+    @Select(DOC_COLUMNS + "WHERE d.id=#{id} AND d.metadata->>'deleted_at' IS NULL")
     Document document(@Param("id") Long id);
     @Select("SELECT id, parent_id AS \"parentId\", chunk_level AS \"chunkLevel\", content, metadata::text AS metadata, "
             + "target_major AS \"targetMajor\", target_grade AS \"targetGrade\", doc_status AS \"docStatus\" "
@@ -25,8 +25,12 @@ public interface PortalMapper {
     List<Chunk> chunks(@Param("id") Long id, @Param("limit") int limit, @Param("offset") int offset);
     @Select("SELECT COUNT(*) FROM doc_chunks WHERE doc_id=#{id}")
     long countChunks(@Param("id") Long id);
-    @Select("SELECT status FROM knowledge_docs WHERE id=#{id} FOR UPDATE")
+    @Select("SELECT status FROM knowledge_docs WHERE id=#{id} AND metadata->>'deleted_at' IS NULL FOR UPDATE")
     String lockStatus(@Param("id") Long id);
+    @Select("SELECT EXISTS(SELECT 1 FROM app_ingestion_jobs WHERE rebuild_of=#{id} AND state IN ('queued','processing'))")
+    boolean hasLiveRebuild(@Param("id") Long id);
+    @Update("UPDATE knowledge_docs SET status='deprecated',metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('deleted_at',now(),'deleted_by',#{userId}),updated_at=now() WHERE id=#{id} AND metadata->>'deleted_at' IS NULL")
+    int deleteDocument(@Param("id") Long id,@Param("userId") Long userId);
 
     @Select("SELECT s.id, COALESCE(s.title,(SELECT left(q.original_query, 80) FROM rag_queries q WHERE q.session_id=s.id ORDER BY q.id LIMIT 1), '新对话') AS title, "
             + "(SELECT COUNT(*) FROM rag_queries q WHERE q.session_id=s.id) AS \"queryCount\", s.updated_at AS \"updatedAt\" "

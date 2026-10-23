@@ -94,12 +94,37 @@ public class WorkflowManagementService {
     public List<Map<String,Object>> audits(int page,int size){administrator();page(page,size);return db.queryForList("SELECT id,actor_id,action,object_type,object_id,detail,created_at FROM app_audit_events ORDER BY id DESC LIMIT ? OFFSET ?",size,(page-1)*size);}
     @Transactional
     public void editDocument(long id,String title,String version) {
+        editDocument(id,new cn.redture.campus.pojo.dto.DocumentEditRequestDTO(title,version,null));
+    }
+    @Transactional
+    public void editDocument(long id,cn.redture.campus.pojo.dto.DocumentEditRequestDTO request) {
+        String title=request.title(),version=request.version();
         portal.requireManager(); if(title==null||title.isBlank()||title.length()>255||version==null||version.isBlank()||version.length()>32) invalid();
+        var locked=db.queryForList("SELECT metadata::text AS metadata,status FROM knowledge_docs WHERE id=? FOR UPDATE",id);
+        if(locked.isEmpty())missing();
         var before=portal.document(id);
         if(db.update("UPDATE knowledge_docs SET title=?,version=?,updated_at=now() WHERE id=? AND status IN ('active','deprecated')",title.trim(),version.trim(),id)!=1)
             fail(HttpStatus.CONFLICT,"DOCUMENT_BUSY","仅可编辑已完成入库的文档；正文或切片变更请执行版本重建");
-        audit.record("DOCUMENT_EDIT","document",id,Map.of("previousTitle",before.getTitle(),"title",title,"version",version));
+        var detail=new LinkedHashMap<String,Object>();
+        detail.put("previousTitle",before.getTitle());detail.put("title",title.trim());detail.put("previousVersion",before.getVersion());detail.put("version",version.trim());
+        if(request.metadata()!=null) {
+            var meta=request.metadata();
+            String major=blankToNull(meta.targetMajor()),cohort=blankToNull(meta.targetCohort()),department=blankToNull(meta.department());
+            validateScope(major,meta.targetGrade(),cohort);
+            if(department!=null&&department.length()>100)invalid();
+            var patch=new LinkedHashMap<String,Object>();
+            patch.put("target_major",major);patch.put("target_grade",meta.targetGrade());patch.put("target_cohort",cohort);
+            patch.put("department",department);patch.put("effective_date",meta.effectiveDate()==null?null:meta.effectiveDate().toString());
+            // Application-wide NON_NULL serialization must not erase explicit scope-clearing values.
+            var patchNode=json.createObjectNode();patch.forEach((key,value)->patchNode.set(key,value==null?com.fasterxml.jackson.databind.node.NullNode.instance:json.valueToTree(value)));
+            String encoded=write(patchNode);
+            db.update("UPDATE knowledge_docs SET metadata=COALESCE(metadata,'{}'::jsonb)||?::jsonb WHERE id=?",encoded,id);
+            db.update("UPDATE doc_chunks SET target_major=?,target_grade=?,metadata=COALESCE(metadata,'{}'::jsonb)||?::jsonb WHERE doc_id=?",major,meta.targetGrade(),encoded,id);
+            detail.put("previousMetadata",locked.getFirst().get("metadata"));detail.put("metadata",patchNode);
+        }
+        audit.record("DOCUMENT_EDIT","document",id,detail);
     }
+    private String blankToNull(String value){return value==null||value.isBlank()?null:value.trim();}
     private void validateScope(String major,Integer grade,String cohort) {
         if(major!=null&&major.length()>100||grade!=null&&(grade<1900||grade>2200)||cohort!=null&&!cohort.matches("20\\d{2}届"))invalid();
     }
