@@ -13,3 +13,9 @@
 .history-card-tools .ant-checkbox-wrapper{font-size:12px;color:#7a8770}
 .history-entry .history-card{padding:8px 22px 22px;border:0;background:transparent;box-shadow:none}
 @media(max-width:760px){.history-toolbar{gap:10px}.history-card-tools{padding:12px 18px 8px}.history-entry .history-card{padding:8px 18px 20px}}
+.document-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.document-detail-heading .detail-title { margin: 0; overflow-wrap: anywhere; }
+.original-loading { padding: 48px 0; text-align: center; }
+.original-toolbar { margin-bottom: 16px; }
+.original-frame { display: block; width: 100%; height: max(400px, 60dvh); border: 1px solid var(--border, #dce3d8); border-radius: 10px; background: white; }
+.original-text { margin: 0; padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65dvh; overflow: auto; border: 1px solid var(--border, #dce3d8); border-radius: 10px; background: white; }

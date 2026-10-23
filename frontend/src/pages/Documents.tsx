@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, InputNumber, Pagination, Popconfirm, Select, Space, Spin, Table, Tag, Upload, message } from 'antd';
+import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Spin, Table, Tabs, Tag, Upload, message } from 'antd';
 import type { UploadFile } from 'antd';
 import WorkspaceShell from '../components/WorkspaceShell';
 import Icon from '../components/Icon';
+import DocumentOriginal from '../components/DocumentOriginal';
 import ragService from '../services/rag';
 import type { UploadResult } from '../services/rag';
-import { getDocuments, getDocument, getChunks, setDocumentStatus, metadata, dateText } from '../services/portal';
+import { getDocuments, getDocument, getChunks, setDocumentStatus, editDocument, metadata, dateText } from '../services/portal';
 import type { DocumentRecord, ChunkRecord, Page } from '../services/portal';
 import { errorMessage } from '../services/api';
 const statuses: Record<string, { label: string; color: string }> = { pending: { label: '待处理', color: 'default' }, processing: { label: '入库中', color: 'processing' }, active: { label: '已启用', color: 'success' }, deprecated: { label: '已停用', color: 'default' }, failed: { label: '入库失败', color: 'error' } };
@@ -13,6 +14,8 @@ function statusTag(status: string) { return <Tag color={statuses[status]?.color}
 interface UploadValues { title: string; version: string; strategy?: string; targetMajor?: string; targetGrade?: number; targetCohort?: string; department?: string; effectiveDate?: string }
 export default function DocumentsPage() {
  const [form] = Form.useForm<UploadValues>();
+ const [editForm] = Form.useForm<UploadValues>();
+ const [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [editError, setEditError] = useState('');
  const [data, setData] = useState<Page<DocumentRecord>>(); const [page, setPage] = useState(1); const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [revision, setRevision] = useState(0);
  const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [uploadOpen, setUploadOpen] = useState(false); const [file, setFile] = useState<UploadFile>(); const [uploading, setUploading] = useState(false); const [uploadResult, setUploadResult] = useState<UploadResult>(); const [uploadError, setUploadError] = useState('');
  const [detailId, setDetailId] = useState<number>(); const [detail, setDetail] = useState<DocumentRecord>(); const [chunks, setChunks] = useState<Page<ChunkRecord>>(); const [chunkPage, setChunkPage] = useState(1); const [detailError, setDetailError] = useState(''); const [detailLoading, setDetailLoading] = useState(false); const [changingId, setChangingId] = useState<number>();
@@ -33,9 +36,25 @@ export default function DocumentsPage() {
   finally { setUploading(false); }
  }
  async function changeStatus(doc: DocumentRecord) { setChangingId(doc.id); try { await setDocumentStatus(doc.id, doc.status === 'active' ? 'deprecated' : 'active'); message.success('文档状态已更新'); setRevision(v => v + 1); } catch (e) { message.error(errorMessage(e)); } finally { setChangingId(undefined); } }
+ function openEdit() {
+  if (!detail) return;
+  const values = metadata(detail.metadata);
+  editForm.resetFields(); editForm.setFieldsValue({ title: detail.title, version: detail.version,
+   targetMajor: values.target_major as string || undefined, targetGrade: values.target_grade as number || undefined,
+   targetCohort: values.target_cohort as string || undefined, department: values.department as string || undefined, effectiveDate: values.effective_date as string || undefined });
+  setEditError(''); setEditing(true);
+ }
+ async function saveProperties(values: UploadValues) {
+  if (!detail || saving) return;
+  setSaving(true); setEditError('');
+  const nullable = (value?: string) => value?.trim() || null;
+  try { await editDocument(detail.id, { title: values.title.trim(), version: values.version.trim(), metadata: {
+   targetMajor: nullable(values.targetMajor), targetGrade: values.targetGrade ?? null, targetCohort: nullable(values.targetCohort), department: nullable(values.department), effectiveDate: nullable(values.effectiveDate) } });
+   setEditing(false); setRevision(v => v + 1); message.success('文档属性已保存，适用范围已同步更新');
+  } catch (e) { setEditError(errorMessage(e)); } finally { setSaving(false); }
+ }
  const meta = detail ? metadata(detail.metadata) : {};
  return <WorkspaceShell title="知识库管理"><div className="portal-content"><div className="page-heading"><div><span className="eyebrow">KNOWLEDGE WORKSPACE</span><h1>让校园知识，有序生长。</h1><p>维护权威资料，让每一条回答都有可靠的依据。</p></div><Button type="primary" size="large" icon={<Icon name="plus" />} onClick={() => { setUploadOpen(true); setUploadResult(undefined); setUploadError(''); }}>添加文档</Button></div>
- <div className="management-guide"><Icon name="book" size={25} /><div><strong>从一份原始资料，到一条可追溯的答案</strong><p>上传文件 → 解析与切片 → 生成向量 → 正式入库。停用后，文档不再参与新的检索。</p></div></div>
  <section className="portal-card"><div className="table-toolbar"><div><h2>知识文档</h2><span>共 {data?.total ?? '—'} 份资料</span></div><Space wrap><Input.Search aria-label="搜索文档标题" placeholder="搜索文档标题" allowClear onSearch={value => { setSearch(value); setPage(1); }} style={{ width: 225 }} /><Select aria-label="文档状态筛选" value={status} style={{ width: 125 }} onChange={value => { setStatus(value); setPage(1); }} options={[{ value: '', label: '全部状态' }, ...Object.entries(statuses).map(([value, item]) => ({ value, label: item.label }))]} /><Button onClick={() => setRevision(v => v + 1)}>刷新</Button></Space></div>
  {error ? <Alert type="error" showIcon title="无法加载文档" description={error} action={<Button onClick={() => setRevision(v => v + 1)}>重试</Button>} /> : <Table rowKey="id" loading={loading} dataSource={data?.items} scroll={{ x: 830 }} locale={{ emptyText: <Empty description="没有匹配的文档，可以调整筛选或添加新资料" /> }} pagination={{ current: page, pageSize: 10, total: data?.total, showSizeChanger: false, onChange: setPage }} columns={[
  { title: '文档', dataIndex: 'title', render: (_, doc: DocumentRecord) => <button className="document-title" onClick={() => { setDetailId(doc.id); setChunkPage(1); }}><span className="doc-file-icon"><Icon name="file" /></span><span><strong>{doc.title}</strong><small>{doc.fileType.toUpperCase()} · {doc.version} · ID {doc.id}</small></span></button> },
@@ -58,7 +77,33 @@ export default function DocumentsPage() {
  {uploadError && <Alert type="error" showIcon title="入库未完成" description={uploadError} style={{ margin: '15px 0' }} />}
  {uploading && <Alert type="info" showIcon title="正在解析并入库，请保持页面开启" style={{ margin: '15px 0' }} />}
  <Button type="primary" htmlType="submit" block size="large" loading={uploading}>上传并入库</Button></Form></Drawer>
- <Drawer title="文档详情与切片" width="min(760px, 100vw)" destroyOnHidden open={detailId !== undefined} onClose={() => { setDetailId(undefined); setDetail(undefined); setChunks(undefined); }}>
- {detailLoading ? <Spin /> : detailError ? <Alert type="error" title={detailError} /> : detail && <><h2 className="detail-title">{detail.title}</h2><Descriptions size="small" column={2} bordered items={[{ key: 'id', label: '文档 ID', children: detail.id }, { key: 'status', label: '状态', children: statusTag(detail.status) }, { key: 'version', label: '版本', children: detail.version }, { key: 'format', label: '格式', children: detail.fileType.toUpperCase() }, { key: 'major', label: '适用专业', children: String(meta.target_major || '通用 / 未指定') }, { key: 'grade', label: '入学年份', children: String(meta.target_grade || '未指定') }, { key: 'cohort', label: '毕业届别', children: String(meta.target_cohort || '未指定') }, { key: 'dept', label: '发布部门', children: String(meta.department || '未指定') }, { key: 'effective', label: '生效日期', children: String(meta.effective_date || '未指定') }, { key: 'creator', label: '上传人', children: detail.createdByName || '未知' }, { key: 'strategy', label: '切片策略', children: String(metadata(detail.chunkStrategy).type || '未记录') }, { key: 'counts', label: '切片数量', children: `${detail.childChunks} 子块 / ${detail.parentChunks} 父块` }]} /><h3 className="chunks-heading">切片正文 <span>共 {chunks?.total ?? 0} 块</span></h3>{chunks?.items.map(chunk => <details className="chunk-preview" key={chunk.id}><summary><Tag>{chunk.chunkLevel === 'parent' ? '父块' : '子块'}</Tag>#{chunk.id}{chunk.parentId && <span> · 父块 #{chunk.parentId}</span>}</summary><p>{chunk.content}</p><small>{chunk.targetMajor || '通用专业'} · {chunk.targetGrade || '未指定年份'}</small></details>)}<Pagination current={chunkPage} total={chunks?.total} pageSize={10} onChange={setChunkPage} showSizeChanger={false} /></>}
- </Drawer></WorkspaceShell>;
+ <Drawer title="文档详情" width="min(760px, 100vw)" destroyOnHidden open={detailId !== undefined} onClose={() => { if (saving) return; setEditing(false); setDetailId(undefined); setDetail(undefined); setChunks(undefined); }}>
+ {detailLoading ? <Spin /> : detailError ? <Alert type="error" title={detailError} /> : detail && <>
+  <div className="document-detail-heading"><h2 className="detail-title">{detail.title}</h2><Button onClick={openEdit} disabled={!['active', 'deprecated'].includes(detail.status)}>编辑属性</Button></div>
+  <Tabs defaultActiveKey="original" items={[
+   { key: 'original', label: '原始文档', children: <DocumentOriginal document={detail} /> },
+   { key: 'properties', label: '文档属性', children: <Descriptions size="small" column={2} bordered items={[
+    { key: 'id', label: '文档 ID', children: detail.id }, { key: 'status', label: '状态', children: statusTag(detail.status) },
+    { key: 'version', label: '版本', children: detail.version }, { key: 'format', label: '格式', children: detail.fileType.toUpperCase() },
+    { key: 'major', label: '适用专业', children: String(meta.target_major || '通用 / 未指定') }, { key: 'grade', label: '入学年份', children: String(meta.target_grade || '未指定') },
+    { key: 'cohort', label: '毕业届别', children: String(meta.target_cohort || '未指定') }, { key: 'dept', label: '发布部门', children: String(meta.department || '未指定') },
+    { key: 'effective', label: '生效日期', children: String(meta.effective_date || '未指定') }, { key: 'creator', label: '上传人', children: detail.createdByName || '未知' },
+    { key: 'strategy', label: '切片策略', children: String(metadata(detail.chunkStrategy).type || '未记录') }, { key: 'counts', label: '切片数量', children: `${detail.childChunks} 子块 / ${detail.parentChunks} 父块` },
+   ]} /> },
+   { key: 'chunks', label: '切片正文', children: <><h3 className="chunks-heading">切片正文 <span>共 {chunks?.total ?? 0} 块</span></h3>{chunks?.items.map(chunk => <details className="chunk-preview" key={chunk.id}><summary><Tag>{chunk.chunkLevel === 'parent' ? '父块' : '子块'}</Tag>#{chunk.id}{chunk.parentId && <span> · 父块 #{chunk.parentId}</span>}</summary><p>{chunk.content}</p><small>{chunk.targetMajor || '通用专业'} · {chunk.targetGrade || '未指定年份'}</small></details>)}<Pagination current={chunkPage} total={chunks?.total} pageSize={10} onChange={setChunkPage} showSizeChanger={false} /></> },
+  ]} />
+ </>}
+ </Drawer>
+ <Modal title="编辑文档属性" open={editing} onCancel={() => { if (!saving) setEditing(false); }} closable={!saving} maskClosable={!saving} keyboard={!saving} footer={null} destroyOnHidden>
+  <Form form={editForm} layout="vertical" onFinish={saveProperties} disabled={saving} requiredMark="optional">
+   <Form.Item name="title" label="文档标题" rules={[{ required: true, whitespace: true, message: '请输入文档标题' }, { max: 255 }]}><Input maxLength={255} /></Form.Item>
+   <Form.Item name="version" label="文档版本" rules={[{ required: true, whitespace: true }, { max: 32 }]}><Input maxLength={32} /></Form.Item>
+   <div className="form-grid"><Form.Item name="targetMajor" label="适用专业"><Input maxLength={100} placeholder="通用资料可留空" /></Form.Item><Form.Item name="targetGrade" label="入学年份"><InputNumber min={1900} max={2200} precision={0} style={{ width: '100%' }} /></Form.Item></div>
+   <div className="form-grid"><Form.Item name="targetCohort" label="毕业届别" rules={[{ pattern: /^20\d{2}届$/, message: '请输入如2028届，或留空' }]}><Input maxLength={32} placeholder="如2028届" /></Form.Item><Form.Item name="department" label="发布部门"><Input maxLength={100} /></Form.Item></div>
+   <Form.Item name="effectiveDate" label="生效日期"><Input type="date" /></Form.Item>
+   <p className="form-helper">保存后，适用范围会同步用于后续检索。清空字段表示未指定；原始文件和课程正文保持原样。</p>
+   {editError && <Alert type="error" showIcon title="保存失败" description={editError} style={{ marginBottom: 16 }} />}
+   <Space><Button type="primary" htmlType="submit" loading={saving}>保存属性</Button><Button disabled={saving} onClick={() => setEditing(false)}>取消</Button></Space>
+  </Form>
+ </Modal></WorkspaceShell>;
 }

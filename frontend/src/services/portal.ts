@@ -10,6 +10,9 @@ export const getDocuments = async (params: { page: number; pageSize: number; sea
 export const getDocument = async (id: number): Promise<DocumentRecord> => (await api.get(`/admin/documents/${id}`)).data.data;
 export const getChunks = async (id: number, page = 1): Promise<Page<ChunkRecord>> => (await api.get(`/admin/documents/${id}/chunks`, { params: { page, pageSize: 10 } })).data.data;
 export const setDocumentStatus = async (id: number, status: string) => api.put(`/admin/documents/${id}/status`, { status });
+export interface DocumentEdit { title: string; version: string; metadata: { targetMajor: string | null; targetGrade: number | null; targetCohort: string | null; department: string | null; effectiveDate: string | null } }
+export const editDocument = async (id: number, body: DocumentEdit) => api.put(`/admin/documents/${id}`, body);
+export const getDocumentOriginal = async (id: number) => api.get<Blob>(`/admin/documents/${id}/original`, { responseType: 'blob' });
 export const getSessions = async (page = 1): Promise<Page<SessionRecord>> => (await api.get('/rag/sessions', { params: { page, pageSize: 12 } })).data.data;
 export const deleteSession = async (id: number): Promise<{ deletedCount: number }> => (await api.delete(`/rag/sessions/${id}`)).data.data;
 export const deleteSessions = async (ids: number[]): Promise<{ deletedCount: number }> => (await api.post('/rag/sessions/batch-delete', { ids })).data.data;
