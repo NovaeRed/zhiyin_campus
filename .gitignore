@@ -54,6 +54,7 @@ nbattrs/
 data/
 
 # Local credentials and runtime configuration
+.secrets/
 .env
 .env.*
 application-local.yaml

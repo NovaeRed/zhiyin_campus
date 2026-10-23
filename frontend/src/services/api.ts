@@ -1,5 +1,5 @@
 import axios from 'axios';
-const baseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '/api' : 'http://localhost:8080');
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
 export class ApiError extends Error { code: number; constructor(text: string, code: number) { super(text); this.code = code; } }
 export function errorMessage(error: unknown) { return error instanceof Error ? error.message : '操作失败，请稍后重试'; }
 export function clearTokens() { localStorage.removeItem('token'); localStorage.removeItem('refresh_token'); }

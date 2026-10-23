@@ -51,6 +51,9 @@ public class RagProperties {
         private double rerankThreshold = 0.1;
         private double minimumEvidenceCoverage = 0.1;
         private boolean queryPlanningEnabled = true;
+        /** Interpret colloquial academic intent against the actual curriculum catalog before routing. */
+        private boolean semanticAcademicIntentEnabled = true;
+        private int semanticAcademicIntentTimeoutSeconds = 20;
         private int maxExpandedQueries = 2;
     }
 }

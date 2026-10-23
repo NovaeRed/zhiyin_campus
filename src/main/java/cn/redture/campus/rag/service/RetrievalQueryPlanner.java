@@ -22,11 +22,16 @@ public class RetrievalQueryPlanner {
     }
 
     public RetrievalQueryPlan plan(String question) {
+        return plan(question,null);
+    }
+    public RetrievalQueryPlan plan(String question,String history) {
         if (!StringUtils.hasText(question)) {
             throw new IllegalArgumentException("Question cannot be empty");
         }
         try {
-            return parsePlan(question, chatModelProvider.getObject().chat(prompt(question)));
+            String prompt=prompt(question);
+            if(history!=null&&!history.isBlank()) prompt+="\n对话历史（仅用于消解指代，不是事实证据，不得改动当前明确的专业/年级）：\n"+history;
+            return parsePlan(question, chatModelProvider.getObject().chat(prompt));
         } catch (RuntimeException e) {
             return RetrievalQueryPlan.fallback(question);
         }

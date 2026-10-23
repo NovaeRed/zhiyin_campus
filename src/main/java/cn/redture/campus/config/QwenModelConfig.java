@@ -15,6 +15,16 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties(RagProperties.class)
 public class QwenModelConfig {
+    @Bean
+    @Lazy
+    public dev.langchain4j.model.chat.StreamingChatModel qwenStreamingChatModel(RagProperties properties) {
+        var qwen=properties.getQwen();
+        var builder=dev.langchain4j.community.model.dashscope.QwenStreamingChatModel.builder()
+                .apiKey(resolveApiKey(qwen)).modelName(qwen.getChatModel()).temperature(qwen.getTemperature())
+                .topP(qwen.getTopP()).maxTokens(qwen.getMaxTokens());
+        if(StringUtils.hasText(qwen.getBaseUrl()))builder.baseUrl(qwen.getBaseUrl());
+        return builder.build();
+    }
 
     @Bean
     @Lazy

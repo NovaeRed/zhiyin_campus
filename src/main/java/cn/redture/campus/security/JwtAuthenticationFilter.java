@@ -38,6 +38,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Resource
     private HandlerExceptionResolver handlerExceptionResolver;
 
+    @Resource
+    private cn.redture.campus.service.AccountAccessService accounts;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         String path = request.getRequestURI();
@@ -61,7 +64,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String uid = uidObj != null ? uidObj.toString() : null;
 
                 if (username != null && uid != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    UserPrincipal principal = new UserPrincipal(uid, username, token);
+                    Long userId;
+                    try { userId = Long.valueOf(uid); }
+                    catch (NumberFormatException invalid) { throw new InvalidTokenException("无效的用户标识"); }
+                    var user = accounts.requireActive(userId);
+                    UserPrincipal principal = new UserPrincipal(uid, user.getUsername(), token);
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

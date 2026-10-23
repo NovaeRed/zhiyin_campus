@@ -11,6 +11,8 @@ export const getDocument = async (id: number): Promise<DocumentRecord> => (await
 export const getChunks = async (id: number, page = 1): Promise<Page<ChunkRecord>> => (await api.get(`/admin/documents/${id}/chunks`, { params: { page, pageSize: 10 } })).data.data;
 export const setDocumentStatus = async (id: number, status: string) => api.put(`/admin/documents/${id}/status`, { status });
 export const getSessions = async (page = 1): Promise<Page<SessionRecord>> => (await api.get('/rag/sessions', { params: { page, pageSize: 12 } })).data.data;
+export const deleteSession = async (id: number): Promise<{ deletedCount: number }> => (await api.delete(`/rag/sessions/${id}`)).data.data;
+export const deleteSessions = async (ids: number[]): Promise<{ deletedCount: number }> => (await api.post('/rag/sessions/batch-delete', { ids })).data.data;
 export const getHistory = async (id: number, page = 1): Promise<Page<HistoryQuery>> => (await api.get(`/rag/sessions/${id}/queries`, { params: { page, pageSize: 50 } })).data.data;
 export function metadata(value: string): Record<string, unknown> { try { const parsed = JSON.parse(value); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }
 export function dateText(value: string) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'; }

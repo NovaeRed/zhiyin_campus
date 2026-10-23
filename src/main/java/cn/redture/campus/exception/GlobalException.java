@@ -23,7 +23,8 @@ public class GlobalException {
      * @return RestResult
      */
     @ExceptionHandler(BaseException.class)
-    public RestResult<Void> handleBaseException(BaseException e) {
+    public RestResult<Void> handleBaseException(BaseException e, jakarta.servlet.http.HttpServletResponse response) {
+        response.setStatus(e.getCode());
         log.warn("业务异常: code={}, errorCode={}, message={}", e.getCode(), e.getErrorCode(), e.getMessage());
         return RestResult.error(HttpStatus.valueOf(e.getCode()), e.getMessage(), e.getErrorCode());
     }
@@ -53,6 +54,30 @@ public class GlobalException {
     public RestResult<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         log.warn("上传文件超过大小限制: {}", e.getMessage());
         return RestResult.badRequest("上传文件超过大小限制");
+    }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.validation.BindException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public RestResult<Void> handleMalformedRequest(Exception e) {
+        // Do not echo parser messages: they can contain submitted passwords or document text.
+        log.warn("请求格式无效: {}", e.getClass().getSimpleName());
+        return RestResult.badRequest("请求格式或参数不合法，请检查请求体、参数类型及必填文件");
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    public RestResult<Void> handleUnsupportedMethod(Exception e) {
+        return RestResult.error(HttpStatus.METHOD_NOT_ALLOWED, "请求方法不支持", "METHOD_NOT_ALLOWED");
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public RestResult<Void> handleUnsupportedMediaType(Exception e) {
+        return RestResult.error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "请求内容类型不支持", "UNSUPPORTED_MEDIA_TYPE");
     }
 
     /**

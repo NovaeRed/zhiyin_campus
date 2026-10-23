@@ -2,3 +2,30 @@
 @media(min-width:1450px){.content-wrap{padding-top:48px}.welcome-banner{height:340px}.banner-copy{top:42px}.banner-copy h1{font-size:38px}.explore{margin:36px 0}}
 @media(max-width:1050px){.sidebar{width:220px;padding:28px 16px 18px}.content-wrap{padding:26px}.topbar{padding:0 26px}.topic-card{padding:18px 14px}.banner-copy{left:24px}.banner-copy h1{font-size:29px}.workspace-footer{margin:0 26px}.profile{gap:7px}}
 @media(max-width:760px){.workspace{display:block}.sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;gap:12px;padding:16px;border-right:0;border-bottom:1px solid #e2e8dc}.brand{font-size:19px;letter-spacing:1px}.brand-mark{width:36px;height:36px}.brand small{font-size:8px}.new-chat{margin:0 0 0 auto;padding:10px;font-size:11px;gap:5px}.sidebar .nav-caption,.sidebar .nav-active,.sidebar .nav-item,.sidebar-note,.profile>div,.profile-avatar{display:none}.profile{border:0;padding:0}.profile button{padding:5px}.topbar{height:56px;padding:0 18px;font-size:13px}.topbar div>span{display:none}.content-wrap{padding:20px 16px}.welcome-banner{height:282px}.banner-copy{left:22px;top:26px}.welcome-banner img{object-position:62% center}.welcome-banner:after{background:linear-gradient(90deg,#f6f0e5 0%,#f6f0e5df 42%,#f6f0e520 100%)}.banner-copy h1{font-size:28px}.section-heading>span{display:none}.topic-grid{gap:8px}.topic-card{padding:14px 10px}.topic-card h3{font-size:13px}.topic-card p{font-size:10px}.topic-icon{width:34px;height:34px}.topic-link{font-size:10px;margin-top:14px}.scope-row{flex-wrap:wrap;gap:8px}.scope-row>span{width:100%}.scope-row .ant-input{width:calc(58% - 4px)}.scope-row .ant-input:last-child{width:calc(42% - 4px)}.composer{padding:14px}.enter-hint{display:none}.composer-actions .ant-btn{margin-left:auto}.workspace-footer{margin:0 16px;font-size:9px;gap:12px}.knowledge-badge{font-size:10px}.disclaimer{font-size:9px}.conversation{min-height:300px}}
+
+/* Chat keeps its navigation and composer in the viewport; only this pane scrolls. */
+.chat-workspace{height:100dvh;min-height:0;overflow:hidden}
+.chat-workspace .sidebar{height:100%;min-height:0;overflow-y:auto}
+.chat-workspace .main-panel{min-height:0;overflow:hidden}
+.chat-workspace .topbar{flex-shrink:0}
+.chat-workspace .content-wrap{display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:0 42px 12px}
+.chat-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:34px 0 12px;scroll-padding-bottom:12px}
+.chat-workspace .conversation{min-height:0;padding-bottom:12px}
+.chat-workspace .composer-area{flex-shrink:0;margin-top:8px}
+.chat-workspace .workspace-footer{flex-shrink:0;padding:10px 0}
+@media(min-width:1450px){.chat-scroll{padding-top:48px}}
+@media(max-width:1050px){.chat-workspace .content-wrap{padding:0 26px 10px}.chat-scroll{padding-top:26px}}
+@media(max-width:760px){
+ .chat-workspace{display:flex;flex-direction:column}
+ .chat-workspace .sidebar{height:auto;flex-shrink:0;overflow:visible}
+ .chat-workspace .content-wrap{padding:0 16px 8px}
+ .chat-scroll{padding-top:16px}
+ .chat-workspace .scope-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:8px}
+ .chat-workspace .scope-row>span,.chat-workspace .scope-row .ant-input:first-of-type{grid-column:1/-1}
+ .chat-workspace .scope-row .ant-input,.chat-workspace .scope-row .ant-input:last-child{width:100%;max-width:none}
+ .chat-workspace .composer{padding:10px 12px}
+ .chat-workspace .composer textarea.ant-input{max-height:96px!important;overflow-y:auto!important}
+ .chat-workspace .composer-actions{margin-top:8px}
+ .chat-workspace .disclaimer{margin-top:6px}
+ .chat-workspace .workspace-footer{display:none}
+}

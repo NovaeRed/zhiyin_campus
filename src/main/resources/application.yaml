@@ -1,7 +1,8 @@
 server:
-  port: 8080
-
+  port: 8081
 spring:
+  config:
+    import: optional:file:./application-local.yaml
   application:
     name: zhiyin-campus
   servlet:
@@ -9,39 +10,37 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/zhiyin-campus}
+    url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: 6379
-      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
       lettuce:
         pool:
           max-active: 10
           max-idle: 10
           min-idle: 1
           time-between-eviction-runs: 10s
+      username: ${REDIS_USERNAME}
   jackson:
-    default-property-inclusion: non_null # JSON处理时忽略非空字段
-
+    default-property-inclusion: non_null
 mybatis-plus:
   type-aliases-package: cn.redture
   configuration:
-    default-enum-type-handler: cn.redture.campus.util.PgEnumTypeHandler # 自定义枚举处理器
+    default-enum-type-handler: cn.redture.campus.util.PgEnumTypeHandler
 logging:
   level:
     cn.redture: info
   file:
     path: ./logs
-
 jwt:
   secret: ${JWT_SECRET}
-  access_token_expiration: 900 # 15 minutes in seconds
-  refresh_token_expiration_seconds: 604800 # 7 days in seconds
-
+  access_token_expiration: 900
+  refresh_token_expiration_seconds: 604800
 campus:
   rag:
     storage:
@@ -50,7 +49,7 @@ campus:
     qwen:
       api-key: ${Qwen-Api:}
       base-url: ${DASHSCOPE_BASE_URL:}
-      chat-model: qwen3.7-flash
+      chat-model: deepseek-v4-flash-0731
       embedding-model: qwen3.7-text-embedding-flash
       embedding-dimension: 1024
       temperature: 0.2

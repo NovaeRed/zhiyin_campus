@@ -46,13 +46,16 @@ public class AuthServiceImpl implements AuthService {
     @Resource
     private UserMapper userMapper;
 
+    @Resource
+    private cn.redture.campus.service.AccountAccessService accounts;
+
     @Override
     public TokenResponseDTO register(RegisterRequestDTO request) {
-        if (request.getStudentNo() == null || request.getStudentNo().isBlank()) {
-            throw new InvalidInputException("学号不能为空");
+        if (request.getStudentNo() == null || request.getStudentNo().isBlank() || request.getStudentNo().length() > 32) {
+            throw new InvalidInputException("学号长度应为1～32字符");
         }
-        if (request.getUsername() == null || request.getUsername().isBlank()) {
-            throw new InvalidInputException("用户名不能为空");
+        if (request.getUsername() == null || request.getUsername().isBlank() || request.getUsername().length() > 50) {
+            throw new InvalidInputException("用户名长度应为1～50字符");
         }
         // 检查学号是否已存在
         Long count = userMapper.selectCount(new LambdaQueryWrapper<User>()
@@ -62,6 +65,9 @@ public class AuthServiceImpl implements AuthService {
             throw new BaseException(HttpStatus.CONFLICT, "学号已存在", "STUDENT_NO_EXISTS");
         }
 
+        if (request.getPassword() == null || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+            throw new InvalidInputException("密码不能为空且UTF-8编码长度不能超过72字节");
+        }
         if (!RegexUtil.isStrongPassword(request.getPassword())) {
             throw new InvalidInputException("密码强度不足，密码应至少包含8位，且包含大小写字母、数字和特殊字符");
         }
@@ -74,25 +80,33 @@ public class AuthServiceImpl implements AuthService {
         user.setIsActive(true);
         user.setCreatedAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
-        userMapper.insert(user);
+        try {
+            userMapper.insert(user);
+        } catch (org.springframework.dao.DuplicateKeyException duplicate) {
+            // The unique constraint also covers concurrent registrations and soft-deleted accounts.
+            throw new BaseException(HttpStatus.CONFLICT, "学号已存在", "STUDENT_NO_EXISTS");
+        }
 
         return generateAccessAndRefreshToken(user);
     }
 
     @Override
     public TokenResponseDTO login(LoginRequestDTO request) {
+        if (request.getStudentNo() == null || request.getStudentNo().isBlank() || request.getStudentNo().length() > 32
+                || request.getPassword() == null || request.getPassword().isBlank()
+                || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+            throw new InvalidInputException("请提供有效学号和密码");
+        }
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getStudentNo, request.getStudentNo())
                 .isNull(User::getDeletedAt));
         if (user == null) {
             throw new BaseException(HttpStatus.UNAUTHORIZED, "学号或密码错误", "BAD_CREDENTIALS");
         }
-        if (Boolean.FALSE.equals(user.getIsActive())) {
-            throw new BaseException(HttpStatus.FORBIDDEN, "账号已停用", "ACCOUNT_DISABLED");
-        }
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BaseException(HttpStatus.UNAUTHORIZED, "学号或密码错误", "BAD_CREDENTIALS");
         }
+        accounts.requireActive(user.getId());
 
         user.setLastLoginAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
@@ -150,6 +164,7 @@ public class AuthServiceImpl implements AuthService {
         if (!uidFromAccessToken.equals(uidFromRefreshToken)) {
             throw new InvalidRefreshTokenException("令牌不匹配");
         }
+        User user = accounts.requireActive(uidFromRefreshToken);
 
         // 4. 从 Redis 中检查 refresh token 是否存在且匹配
         String key = RedisConstants.AUTH_REFRESH_TOKEN_KEY_PREFIX + uidFromRefreshToken;
@@ -169,11 +184,6 @@ public class AuthServiceImpl implements AuthService {
         tokenManagementUtil.addAccessTokenToBlacklist(expiredAccessToken);
 
         // 6. 验证通过，生成一对全新的 token
-        User user = userMapper.selectById(uidFromRefreshToken);
-        if (user == null || user.getDeletedAt() != null) {
-            throw new RevokedRefreshTokenException("用户状态异常，请重新登录");
-        }
-
         return generateAccessAndRefreshToken(user);
     }
 

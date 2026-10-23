@@ -1,0 +1,21 @@
+package cn.redture.campus.service;
+
+import cn.redture.campus.exception.BaseException;
+import cn.redture.campus.mapper.UserMapper;
+import cn.redture.campus.pojo.entity.User;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AccountAccessService {
+    private final UserMapper users;
+    public AccountAccessService(UserMapper users) { this.users = users; }
+    public User requireActive(Long id) {
+        User user = id == null ? null : users.selectById(id);
+        if (user == null || user.getDeletedAt() != null)
+            throw new BaseException(HttpStatus.UNAUTHORIZED, "账号不存在或已删除，请重新登录", "ACCOUNT_UNAVAILABLE");
+        if (!Boolean.TRUE.equals(user.getIsActive()))
+            throw new BaseException(HttpStatus.FORBIDDEN, "账号已停用", "ACCOUNT_DISABLED");
+        return user;
+    }
+}

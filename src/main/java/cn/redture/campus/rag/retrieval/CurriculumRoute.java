@@ -91,7 +91,7 @@ public record CurriculumRoute(List<Long> docIds) {
         } catch (IOException e) { throw new UncheckedIOException(e); }
     }
 
-    private static String subject(CurriculumDocument d) {
+    public static String subject(CurriculumDocument d) {
         if (d.getTargetMajor() != null && !d.getTargetMajor().isBlank()) return d.getTargetMajor().trim();
         if (!d.getTitle().matches("^20\\d{2}.*")) return "";
         return d.getTitle().replaceFirst("^20\\d{2}(?:级|年|版)?", "")
@@ -99,4 +99,6 @@ public record CurriculumRoute(List<Long> docIds) {
     }
 
     public boolean unavailable() { return docIds != null && docIds.isEmpty(); }
+
+    public static List<String> knownMajors() { return KNOWN_MAJORS; }
 }

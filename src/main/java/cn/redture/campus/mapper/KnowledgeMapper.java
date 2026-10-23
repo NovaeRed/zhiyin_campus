@@ -16,6 +16,12 @@ import java.util.List;
 
 @Mapper
 public interface KnowledgeMapper {
+    @Update("UPDATE rag_queries SET failure_stage=#{phase} WHERE id=#{id} AND workflow_state NOT IN ('cancelled','failed')")
+    void queryPhase(@Param("id") Long id,@Param("phase") String phase);
+    @Update("UPDATE rag_queries SET rewritten_query=#{query} WHERE id=#{id}")
+    void rewriteQuery(@Param("id") Long id,@Param("query") String query);
+    @Update("UPDATE rag_queries SET workflow_state='failed',error_code=#{code},completed_at=now() WHERE id=#{id} AND workflow_state<>'cancelled'")
+    void failQuery(@Param("id") Long id,@Param("code") String code);
 
     @Select("""
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
@@ -65,6 +71,9 @@ public interface KnowledgeMapper {
     @Update("UPDATE rag_sessions SET updated_at = NOW() WHERE id = #{sessionId}")
     int touchSession(@Param("sessionId") Long sessionId);
 
+    @Update("UPDATE rag_sessions SET updated_at = NOW() WHERE id = #{sessionId} AND user_id = #{userId} AND NOT archived AND target_scope->>'deletedAt' IS NULL")
+    int touchOwnedSession(@Param("sessionId") Long sessionId, @Param("userId") Long userId);
+
     @Select("INSERT INTO rag_sessions(user_id, created_at, updated_at) VALUES (#{userId}, NOW(), NOW()) RETURNING id")
     Long insertSession(@Param("userId") Long userId);
 
@@ -78,7 +87,7 @@ public interface KnowledgeMapper {
     @Update("""
             UPDATE rag_queries
             SET workflow_state = 'completed', final_confidence = #{confidence}, completed_at = NOW()
-            WHERE id = #{queryId}
+            WHERE id = #{queryId} AND workflow_state NOT IN ('cancelled','failed')
             """)
     int completeQuery(@Param("queryId") Long queryId, @Param("confidence") double confidence);
 

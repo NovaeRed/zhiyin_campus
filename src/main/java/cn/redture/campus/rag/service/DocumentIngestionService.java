@@ -45,6 +45,14 @@ public class DocumentIngestionService {
     }
 
     public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request) {
+        return ingest(file,request,(phase,percent)->{});
+    }
+
+    public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request, java.util.function.BiConsumer<String,Integer> progress) {
+        return ingest(file,request,progress,true);
+    }
+
+    public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request, java.util.function.BiConsumer<String,Integer> progress, boolean publish) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Upload file cannot be empty");
         }
@@ -57,7 +65,9 @@ public class DocumentIngestionService {
         String title = StringUtils.hasText(request.getTitle()) ? request.getTitle() : stripExtension(originalFilename);
         DocumentChunker chunker = chunkerRouter.resolve(request.getStrategy(), fileType);
 
+        progress.accept("storing",5);
         Path storedPath = storeFile(file, originalFilename);
+        progress.accept("extracting",15);
         var extraction = textExtractor.extractDetailed(storedPath, originalFilename, file.getContentType(), fileType);
         String text = extraction.text();
         if (Boolean.TRUE.equals(extraction.metadata().get("review_required"))) {
@@ -69,6 +79,7 @@ public class DocumentIngestionService {
         }
         if (request.getTargetGrade() == null) request.setTargetGrade(AcademicScope.inferEnrollmentYear(text));
         if (!StringUtils.hasText(request.getTargetMajor())) request.setTargetMajor(CurriculumRoute.inferMajor(text));
+        progress.accept("chunking",30);
         List<ChunkUnit> chunks = chunker.split(text).stream()
                 .filter(chunk -> StringUtils.hasText(chunk.getContent()))
                 .toList();
@@ -81,6 +92,7 @@ public class DocumentIngestionService {
         if (childTexts.isEmpty()) {
             throw new IllegalArgumentException("Document did not produce valid child chunks");
         }
+        progress.accept("embedding",40);
         List<float[]> childEmbeddings = embeddingService.embedDocuments(childTexts);
         if (childEmbeddings.size() != childTexts.size()) {
             throw new IllegalStateException("Embedding result count does not match child chunk count");
@@ -101,6 +113,7 @@ public class DocumentIngestionService {
                 )
         );
         String version = StringUtils.hasText(request.getVersion()) ? request.getVersion() : "v1";
+        progress.accept("persisting",75);
         Long docId = repository.insertDocument(title, storedPath.toString(), fileType, version, docMetadata, strategyMetadata, userId);
 
         try {
@@ -128,9 +141,12 @@ public class DocumentIngestionService {
                     repository.insertChunk(docId, parentId, "child", chunk.getContent(), embedding, metadata,
                             request.getTargetMajor(), request.getTargetGrade());
                     childCount++;
+                    if(childCount%20==0) progress.accept("persisting",75+(int)(20.0*childCount/childTexts.size()));
                 }
             }
-            repository.updateDocumentStatus(docId, "active");
+            progress.accept("publishing",97);
+            // Async jobs publish the new version atomically with their terminal state.
+            if(publish) repository.updateDocumentStatus(docId, "active");
             return DocumentUploadResponseVO.builder()
                     .docId(docId)
                     .title(title)
@@ -138,7 +154,7 @@ public class DocumentIngestionService {
                     .strategy(chunker.strategy())
                     .parentChunks(parentCount)
                     .childChunks(childCount)
-                    .status("active")
+                    .status(publish?"active":"processing")
                     .build();
         } catch (RuntimeException e) {
             repository.updateDocumentStatus(docId, "failed");
@@ -164,7 +180,7 @@ public class DocumentIngestionService {
             if (!target.startsWith(baseDir)) {
                 throw new IllegalArgumentException("Invalid file path");
             }
-            Files.copy(file.getInputStream(), target);
+            try(var input=file.getInputStream()) { Files.copy(input, target); }
             return target;
         } catch (Exception e) {
             throw new IllegalArgumentException("Store file failed: " + e.getMessage(), e);

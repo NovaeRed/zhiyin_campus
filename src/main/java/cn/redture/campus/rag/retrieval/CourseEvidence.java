@@ -14,18 +14,37 @@ public final class CourseEvidence {
     private CourseEvidence() { }
 
     public record Fact(String code, String name, BigDecimal credits, int startYear, int endYear,
-                       int semester, int sourceIndex, Integer enrollmentYear) { }
+                       int semester, int sourceIndex, Integer enrollmentYear, String nature) { }
 
     public static List<Fact> extract(List<RetrievedChunk> chunks) {
         List<Fact> facts = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);
-            var rows = ROW.matcher(chunk.getContent() == null ? "" : chunk.getContent());
+            String content = chunk.getContent() == null ? "" : chunk.getContent();
+            var rows = ROW.matcher(content);
             while (rows.find()) {
                 int start = Integer.parseInt(rows.group(4)), end = Integer.parseInt(rows.group(5));
                 if (end != start + 1) continue;
+                // Parent context contains several course rows. Bind nature to this row's block only.
+                int blockStart = content.lastIndexOf("[TABLE_ROW ", rows.start());
+                int blockEnd = blockStart < 0 ? -1 : content.indexOf("[/TABLE_ROW]", blockStart);
+                String nature = null;
+                if (blockStart >= 0 && blockEnd >= rows.end()) {
+                    String block = content.substring(blockStart, blockEnd);
+                    var label = Pattern.compile("课程性质[=＝]([^；\\r\\n]+)").matcher(block);
+                    if (label.find()) nature = label.group(1).trim();
+                    // Practical labs can explicitly belong to an elective group. "实践" alone is not "必修".
+                    if ("实践".equals(nature)) {
+                        var group = Pattern.compile("(?m)^分组上下文：([^\\r\\n]+)").matcher(block);
+                        if (group.find()) {
+                            String heading = group.group(1);
+                            if (heading.contains("选修") && !heading.contains("必修")) nature = "选修（实践）";
+                            else if (heading.contains("必修") && !heading.contains("选修")) nature = "必修（实践）";
+                        }
+                    }
+                }
                 facts.add(new Fact(rows.group(1), rows.group(2).trim(), new BigDecimal(rows.group(3)), start, end,
-                        Integer.parseInt(rows.group(6)), i + 1, chunk.getTargetGrade()));
+                        Integer.parseInt(rows.group(6)), i + 1, chunk.getTargetGrade(), nature));
             }
         }
         return facts;

@@ -63,7 +63,10 @@ public class KnowledgeRepository {
 
     public Long ensureSession(Long userId, Long sessionId) {
         if (sessionId != null) {
-            knowledgeMapper.touchSession(sessionId);
+            if (knowledgeMapper.touchOwnedSession(sessionId, userId) != 1) {
+                throw new cn.redture.campus.exception.BaseException(org.springframework.http.HttpStatus.NOT_FOUND,
+                        "会话不存在或无权访问", "SESSION_NOT_FOUND");
+            }
             return sessionId;
         }
         return knowledgeMapper.insertSession(userId);
@@ -82,6 +85,9 @@ public class KnowledgeRepository {
     public void completeQuery(Long queryId, double confidence) {
         knowledgeMapper.completeQuery(queryId, confidence);
     }
+    public void queryPhase(Long id,String phase) { knowledgeMapper.queryPhase(id,phase); }
+    public void rewriteQuery(Long id,String query) { knowledgeMapper.rewriteQuery(id,query); }
+    public void failQuery(Long id,String code) { knowledgeMapper.failQuery(id,code); }
 
     public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade,
                                                String targetCohort, int limit) {

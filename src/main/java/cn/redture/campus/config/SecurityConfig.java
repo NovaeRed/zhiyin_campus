@@ -25,10 +25,17 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            EntryRateLimitFilter entryRateLimitFilter,
-                                           JwtAuthenticationFilter jwtFilter) throws Exception {
+                                           JwtAuthenticationFilter jwtFilter,
+                                           com.fasterxml.jackson.databind.ObjectMapper objectMapper) throws Exception {
         http
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable) // 前后端分离，关闭 CSRF
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json;charset=UTF-8");
+                    objectMapper.writeValue(response.getOutputStream(), cn.redture.campus.pojo.model.RestResult.unauthorized("请先登录"));
+                }))
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(
