@@ -87,7 +87,7 @@ try {
  } else { documentId = reuse; await api(`/admin/documents/${reuse}/status`, { status: 'active' }, 'PUT'); checks.push(`Reused test document ${reuse}: browser upload verified in prior run`); }
  await page.locator('.ant-drawer-open .ant-drawer-close').click();
  await page.getByLabel('搜索文档标题').fill(title); await page.getByLabel('搜索文档标题').press('Enter'); await page.getByRole('button', { name: '详情', exact: true }).first().waitFor();
- await page.getByRole('button', { name: '详情', exact: true }).first().click(); await page.getByText('切片正文', { exact: false }).waitFor(); await page.locator('.chunk-preview summary').first().click(); await screenshot(page, 'document-detail.png');
+ await page.getByRole('button', { name: '详情', exact: true }).first().click(); await page.getByRole('tab', { name: '切片正文', exact: true }).click(); await page.locator('.chunk-preview summary').first().click(); await screenshot(page, 'document-detail.png');
  await page.locator('.ant-drawer-open .ant-drawer-close').click(); await page.getByRole('button', { name: '停用', exact: true }).first().click(); await page.getByRole('button', { name: /确\s*定/ }).click(); await page.getByText('已停用', { exact: true }).waitFor(); checks.push('Document search, chunk preview and UI deactivation');
  for (const width of [375, 768]) {
   await page.setViewportSize({ width, height: 900 }); await fits(page, `Documents ${width}px`); await screenshot(page, `documents-${width}.png`);

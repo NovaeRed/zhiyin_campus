@@ -36,6 +36,6 @@ Vue迁移分支为 `feature/vue-frontend-migration`，入口 `src/main.ts`、路
 浏览器验收显式执行 `npm run test:ui:live`，需要运行最新后端和Vite、已安装Microsoft Edge，以及项目根目录现有私有 `application-local.yaml` 和 `PORTAL_TEST_JAVA_CLASSPATH`（PostgreSQL JDBC与SnakeYAML JAR组成的classpath）。配置仅由Java测试辅助程序在内存中读取，不加载轮换脚本、不打印凭证。数据库环境变量可覆盖本地配置。只对专用 `portal_ui_时间戳` 账号临时赋予管理员角色，最终恢复student；上传验收文档最终停用。测试脚本不会输出登录令牌、密码和配置凭证。
 
 
-2026-10-23 后续8081前端迭代：真实Edge自动化扩展为27项并全部通过。覆盖注册密码校验、登录/注销、权限隔离、课程引用、历史恢复、Shift+Enter、断网草稿、文档表单校验/搜索/详情/停用，以及375/768/1440布局。发现并修复失败发送残留重复消息；失败回填不会覆盖用户新输入的草稿，并用同步标记阻止重复发送。当前未重新上传文档或重新Embedding，复用旧验收文档31并最终停用，临时测试维护员恢复student。测试截图与结果位于 `target/frontend-ui-8081/`，细节见 [自动化报告](../doc/frontend-ui-8081.md)。
+2026-10-23 后续8081前端迭代：真实Edge自动化扩展为27项并全部通过。覆盖注册密码校验、登录/注销、权限隔离、课程引用、历史恢复、Shift+Enter、断网草稿、文档表单校验/搜索/详情/停用，以及375/768/1440布局。发现并修复失败发送残留重复消息；失败回填不会覆盖用户新输入的草稿，并用同步标记阻止重复发送。当前未重新上传文档或重新Embedding，复用旧验收文档31并最终停用，临时测试维护员恢复student。上述为历史React版本的验证记录；当前Vue迁移验收见 [Vue迁移报告](../doc/vue-frontend-migration.md)，更新main后的真实验收及未解决超时见 [最新审查报告](../doc/main-update-review.md)。
 
 可配置 `PORTAL_UI_BASE_URL`、`PORTAL_UI_BACKEND_URL`、`PORTAL_UI_OUTPUT`；本轮默认分别为localhost:5174、localhost:8081和target/frontend-ui-8081。`PORTAL_UI_REUSE_DOC`只允许复用标题以“浏览器文档验收-”开头的测试文档。未指定时会进行真实上传、Embedding并产生新文档，结束后停用。
