@@ -2,7 +2,7 @@
 
 当前前端使用 Vue 3、TypeScript、Vue Router、Vite 和 Ant Design Vue。页面采用 `<script setup>` 单文件组件，登录/注册、聊天、历史和文档管理按路由加载，沿用暖白、松绿和校园书院图片，手机、平板和桌面共用一套页面。
 
-Vue迁移分支为 `codex/vue-frontend-migration`，入口 `src/main.ts`、路由 `src/router/index.ts`，共享认证状态位于 `src/composables/auth.ts`。旧React源码保留在 `legacy-react/` 供对照，未物理删除，不参与构建、类型检查、ESLint或运行；当前依赖不再包含React、React DOM、React Router或React版Ant Design。构建使用 `vue-tsc -b && vite build`。下方较早的验证记录属于历史React版本，当前迁移验收见 [Vue迁移报告](../doc/vue-frontend-migration.md)。
+Vue迁移分支为 `feature/vue-frontend-migration`，入口 `src/main.ts`、路由 `src/router/index.ts`，共享认证状态位于 `src/composables/auth.ts`。旧React源码归档已由用户手动删除；当前依赖不再包含React、React DOM、React Router或React版Ant Design。构建使用 `vue-tsc -b && vite build`。下方较早的验证记录属于历史React版本，当前迁移验收见 [Vue迁移报告](../doc/vue-frontend-migration.md)。
 
 聊天页占满当前视口，导航与输入区保持可见，欢迎内容、历史消息和长回答在独立区域滚动；多行输入不会把整页向下撑开。2026-10-23使用真实数学全学程94条课程回答，在1440×900、1366×600、768×900、375×667、390×844检查滚动与输入区位置，并验证新对话及历史列表，共7项通过；截图与记录位于 `target/chat-viewport/`。前端build/lint通过，本轮只修改布局，未修改后端。
 

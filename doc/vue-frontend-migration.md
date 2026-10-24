@@ -1,6 +1,6 @@
 # 前端 Vue 迁移（2026-10-24）
 
-分支：`codex/vue-frontend-migration`，基于 `bugfix/admin-documents-usability` 的 `cb10972`，包含已验证的原文预览、属性编辑和文档删除能力。不合并或推送主分支。
+分支：`feature/vue-frontend-migration`，基于 `bugfix/admin-documents-usability` 的 `cb10972`，包含已验证的原文预览、属性编辑和文档删除能力。不合并或推送主分支。
 
 ## 实现范围
 
@@ -11,7 +11,7 @@
 - 文档上传/校验、状态启停、原文PDF/HTML/TXT/MD预览与下载、属性保存/清空/取消、切片分页及删除确认迁移；保留HTML沙箱隔离和对象URL释放。
 - 现有CSS、校园图片、同源`/api`代理和Axios服务契约保留。未修改后端Java、数据库结构或正式知识文档；本轮不重启后端。
 
-原React页面/组件/入口移动至 `frontend/legacy-react/`，保留实际工作区版本以供对照，没有批量删除文件。归档不参与构建、类型检查、lint或运行，依赖中已移除React运行库、类型和插件。没有将归档声称为另一套可直接运行的应用。
+迁移时保留的 `frontend/legacy-react/` 旧React源码归档现已由用户手动删除；依赖中已移除React运行库、类型和插件，ESLint同步移除旧归档目录的忽略项。
 
 实现参照 [Vue TypeScript Composition API](https://vuejs.org/guide/typescript/composition-api)、[Vue Router](https://router.vuejs.org/guide/) 和 [Ant Design Vue](https://antdv.com/)。
 
