@@ -1,7 +1,9 @@
 package cn.redture.campus.pojo.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Data;
+
 import org.springframework.http.HttpStatus;
 
 /**

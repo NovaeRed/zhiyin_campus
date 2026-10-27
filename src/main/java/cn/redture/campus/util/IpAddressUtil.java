@@ -109,7 +109,8 @@ public final class IpAddressUtil {
         }
     }
 
-    private static String extractClientFromProxyChain(String remoteAddr, List<String> chain, List<String> trustedProxies) {
+    private static String extractClientFromProxyChain(
+        String remoteAddr, List<String> chain, List<String> trustedProxies) {
         // 代理链应从右到左回溯，找到第一个非可信代理地址作为真实客户端。
         String currentHop = remoteAddr;
         for (int i = chain.size() - 1; i >= 0; i--) {
@@ -198,7 +199,8 @@ public final class IpAddressUtil {
     private static boolean containsInvalidIpChars(String value) {
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            boolean allowed = (c >= '0' && c <= '9')
+            boolean allowed =
+                (c >= '0' && c <= '9')
                     || (c >= 'a' && c <= 'f')
                     || (c >= 'A' && c <= 'F')
                     || c == '.'
@@ -226,10 +228,13 @@ public final class IpAddressUtil {
     }
 
     private static String toIpv4Dotted(byte[] bytes) {
-        return (bytes[12] & 0xFF) + "."
-                + (bytes[13] & 0xFF) + "."
-                + (bytes[14] & 0xFF) + "."
-                + (bytes[15] & 0xFF);
+        return (bytes[12] & 0xFF)
+            + "."
+            + (bytes[13] & 0xFF)
+            + "."
+            + (bytes[14] & 0xFF)
+            + "."
+            + (bytes[15] & 0xFF);
     }
 
     private static boolean isUsable(String value) {

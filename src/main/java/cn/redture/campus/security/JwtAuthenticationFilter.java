@@ -1,15 +1,20 @@
 package cn.redture.campus.security;
 
+import static cn.redture.campus.constants.RedisConstants.AUTH_JWT_BLACKLIST_KEY_PREFIX;
+import static cn.redture.campus.security.AuthConstants.TOKEN_PREFIX;
+
 import cn.redture.campus.exception.BaseException;
 import cn.redture.campus.exception.jwtException.InvalidTokenException;
 import cn.redture.campus.exception.jwtException.TokenBlacklistedException;
 import cn.redture.campus.pojo.dto.UserPrincipal;
 import cn.redture.campus.util.JwtUtil;
+
 import jakarta.annotation.Resource;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,10 +26,6 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
-
-import static cn.redture.campus.constants.RedisConstants.AUTH_JWT_BLACKLIST_KEY_PREFIX;
-import static cn.redture.campus.security.AuthConstants.TOKEN_PREFIX;
-
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -42,7 +43,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private cn.redture.campus.service.AccountAccessService accounts;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+    protected void doFilterInternal(
+        HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+        throws ServletException, IOException {
         String path = request.getRequestURI();
         String token = resolveToken(request);
 
@@ -63,14 +66,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String username = usernameObj != null ? usernameObj.toString() : null;
                 String uid = uidObj != null ? uidObj.toString() : null;
 
-                if (username != null && uid != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                if (username != null
+                    && uid != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
                     Long userId;
-                    try { userId = Long.valueOf(uid); }
-                    catch (NumberFormatException invalid) { throw new InvalidTokenException("无效的用户标识"); }
+                    try {
+                        userId = Long.valueOf(uid);
+                    } catch (NumberFormatException invalid) {
+                        throw new InvalidTokenException("无效的用户标识");
+                    }
                     var user = accounts.requireActive(userId);
                     UserPrincipal principal = new UserPrincipal(uid, user.getUsername(), token);
                     UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
+                        new UsernamePasswordAuthenticationToken(
+                            principal, null, Collections.emptyList());
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }

@@ -3,7 +3,9 @@ package cn.redture.campus.security.ratelimit.core;
 import cn.redture.campus.security.ratelimit.EntryRateLimitProperties;
 import cn.redture.campus.security.ratelimit.redis.RateLimitKeyBuilder;
 import cn.redture.campus.security.ratelimit.redis.RedisLuaScriptExecutor;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,15 +36,15 @@ public class RedisTokenBucketRateLimiter implements RateLimiterAlgorithm {
         long ttlMs = calculateTtlMs(capacityScaled, refillTokensScaled, refillPeriodMs);
 
         String key = rateLimitKeyBuilder.buildTokenBucketKey(rule.getName(), identity);
-        List<Long> luaResult = redisLuaScriptExecutor.executeTokenBucket(
+        List<Long> luaResult =
+            redisLuaScriptExecutor.executeTokenBucket(
                 key,
                 nowMs,
                 capacityScaled,
                 refillTokensScaled,
                 refillPeriodMs,
                 REQUEST_TOKENS_SCALED,
-                ttlMs
-        );
+                ttlMs);
 
         boolean allowed = luaResult.get(0) == 1L;
         long remaining = luaResult.get(1);
@@ -55,7 +57,8 @@ public class RedisTokenBucketRateLimiter implements RateLimiterAlgorithm {
     }
 
     private long calculateTtlMs(long capacityScaled, long refillTokensScaled, long refillPeriodMs) {
-        long fullRefillMs = (long) Math.ceil((double) capacityScaled * refillPeriodMs / refillTokensScaled);
+        long fullRefillMs =
+            (long) Math.ceil((double) capacityScaled * refillPeriodMs / refillTokensScaled);
         long ttlMs = Math.max(fullRefillMs * 2L, refillPeriodMs * 2L);
         return Math.max(ttlMs, 1000L);
     }

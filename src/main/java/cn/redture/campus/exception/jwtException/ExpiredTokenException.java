@@ -2,6 +2,7 @@ package cn.redture.campus.exception.jwtException;
 
 import cn.redture.campus.constants.ErrorCodes;
 import cn.redture.campus.exception.BaseException;
+
 import org.springframework.http.HttpStatus;
 
 /**
@@ -16,4 +17,3 @@ public class ExpiredTokenException extends BaseException {
         super(HttpStatus.UNAUTHORIZED, message, errorCode);
     }
 }
-

@@ -18,4 +18,3 @@ public final class AuthConstants {
      */
     public static final String TOKEN_PREFIX = "Bearer ";
 }
-

@@ -8,9 +8,9 @@ import cn.redture.campus.rag.chunk.ChunkerRouter;
 import cn.redture.campus.rag.chunk.DocumentChunker;
 import cn.redture.campus.rag.chunk.TableRowBlocks;
 import cn.redture.campus.rag.repository.KnowledgeRepository;
-import cn.redture.campus.rag.retrieval.AcademicScope;
-import cn.redture.campus.rag.retrieval.CurriculumRoute;
+import cn.redture.campus.rag.retrieval.CurriculumMetadata;
 import cn.redture.campus.util.SecurityContextHolderUtil;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,11 +32,12 @@ public class DocumentIngestionService {
     private final QwenEmbeddingService embeddingService;
     private final KnowledgeRepository repository;
 
-    public DocumentIngestionService(RagProperties properties,
-                                    DocumentTextExtractor textExtractor,
-                                    ChunkerRouter chunkerRouter,
-                                    QwenEmbeddingService embeddingService,
-                                    KnowledgeRepository repository) {
+    public DocumentIngestionService(
+        RagProperties properties,
+        DocumentTextExtractor textExtractor,
+        ChunkerRouter chunkerRouter,
+        QwenEmbeddingService embeddingService,
+        KnowledgeRepository repository) {
         this.properties = properties;
         this.textExtractor = textExtractor;
         this.chunkerRouter = chunkerRouter;
@@ -45,14 +46,22 @@ public class DocumentIngestionService {
     }
 
     public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request) {
-        return ingest(file,request,(phase,percent)->{});
+        return ingest(file, request, (phase, percent) -> {
+        });
     }
 
-    public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request, java.util.function.BiConsumer<String,Integer> progress) {
-        return ingest(file,request,progress,true);
+    public DocumentUploadResponseVO ingest(
+        MultipartFile file,
+        DocumentUploadRequestDTO request,
+        java.util.function.BiConsumer<String, Integer> progress) {
+        return ingest(file, request, progress, true);
     }
 
-    public DocumentUploadResponseVO ingest(MultipartFile file, DocumentUploadRequestDTO request, java.util.function.BiConsumer<String,Integer> progress, boolean publish) {
+    public DocumentUploadResponseVO ingest(
+        MultipartFile file,
+        DocumentUploadRequestDTO request,
+        java.util.function.BiConsumer<String, Integer> progress,
+        boolean publish) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Upload file cannot be empty");
         }
@@ -60,30 +69,49 @@ public class DocumentIngestionService {
             request = new DocumentUploadRequestDTO();
         }
         Long userId = SecurityContextHolderUtil.getUserId();
-        String originalFilename = file.getOriginalFilename() == null ? "document" : file.getOriginalFilename();
+        String originalFilename =
+            file.getOriginalFilename() == null ? "document" : file.getOriginalFilename();
         String fileType = resolveFileType(originalFilename);
-        String title = StringUtils.hasText(request.getTitle()) ? request.getTitle() : stripExtension(originalFilename);
+        String title =
+            StringUtils.hasText(request.getTitle())
+                ? request.getTitle()
+                : stripExtension(originalFilename);
         DocumentChunker chunker = chunkerRouter.resolve(request.getStrategy(), fileType);
 
-        progress.accept("storing",5);
+        progress.accept("storing", 5);
         Path storedPath = storeFile(file, originalFilename);
-        progress.accept("extracting",15);
-        var extraction = textExtractor.extractDetailed(storedPath, originalFilename, file.getContentType(), fileType);
+        progress.accept("extracting", 15);
+        var extraction =
+            textExtractor.extractDetailed(
+                storedPath, originalFilename, file.getContentType(), fileType);
         String text = extraction.text();
         if (Boolean.TRUE.equals(extraction.metadata().get("review_required"))) {
-            throw new IllegalArgumentException("PDF extraction requires manual review before embedding: "
+            throw new IllegalArgumentException(
+                "PDF extraction requires manual review before embedding: "
                     + extraction.metadata().get("issues"));
         }
         if (!StringUtils.hasText(text)) {
             throw new IllegalArgumentException(noExtractableTextMessage(originalFilename, file));
         }
-        if (request.getTargetGrade() == null) request.setTargetGrade(AcademicScope.inferEnrollmentYear(text));
-        if (!StringUtils.hasText(request.getTargetMajor())) request.setTargetMajor(CurriculumRoute.inferMajor(text));
-        progress.accept("chunking",30);
-        List<ChunkUnit> chunks = chunker.split(text).stream()
+        if (!StringUtils.hasText(request.getDocumentType())) {
+            request.setDocumentType(text.contains("[TABLE_ROW ") ? "curriculum" : "general");
+        }
+        if ("curriculum".equals(request.getDocumentType())) {
+            var metadata = CurriculumMetadata.extract(text);
+            if (request.getTargetGrade() == null) {
+                request.setTargetGrade(metadata.enrollmentYear());
+            }
+            if (!StringUtils.hasText(request.getTargetMajor())) {
+                request.setTargetMajor(metadata.major());
+            }
+        }
+        progress.accept("chunking", 30);
+        List<ChunkUnit> chunks =
+            chunker.split(text).stream()
                 .filter(chunk -> StringUtils.hasText(chunk.getContent()))
                 .toList();
-        List<String> childTexts = chunks.stream()
+        List<String> childTexts =
+            chunks.stream()
                 .filter(chunk -> "child".equals(chunk.getLevel()))
                 .map(ChunkUnit::getContent)
                 .filter(StringUtils::hasText)
@@ -92,29 +120,45 @@ public class DocumentIngestionService {
         if (childTexts.isEmpty()) {
             throw new IllegalArgumentException("Document did not produce valid child chunks");
         }
-        progress.accept("embedding",40);
+        progress.accept("embedding", 40);
         List<float[]> childEmbeddings = embeddingService.embedDocuments(childTexts);
         if (childEmbeddings.size() != childTexts.size()) {
-            throw new IllegalStateException("Embedding result count does not match child chunk count");
+            throw new IllegalStateException(
+                "Embedding result count does not match child chunk count");
         }
 
         Map<String, Object> docMetadata = docMetadata(request, originalFilename);
         docMetadata.put("extraction", extraction.metadata());
-        docMetadata.put("embedding", Map.of("model", properties.getQwen().getEmbeddingModel(),
-                "dimensions", properties.getQwen().getEmbeddingDimension(), "batch_id", UUID.randomUUID().toString()));
-        Map<String, Object> strategyMetadata = Map.of(
+        docMetadata.put(
+            "embedding",
+            Map.of(
+                "model",
+                properties.getQwen().getEmbeddingModel(),
+                "dimensions",
+                properties.getQwen().getEmbeddingDimension(),
+                "batch_id",
+                UUID.randomUUID().toString()));
+        Map<String, Object> strategyMetadata =
+            Map.of(
                 "type", chunker.strategy(),
                 "revision", "parent-context-v3",
-                "params", Map.of(
-                        "chunk_size", properties.getChunking().getChunkSize(),
-                        "overlap", properties.getChunking().getOverlap(),
-                        "parent_size", properties.getChunking().getParentSize(),
-                        "child_size", properties.getChunking().getChildSize()
-                )
-        );
+                "params",
+                Map.of(
+                    "chunk_size", properties.getChunking().getChunkSize(),
+                    "overlap", properties.getChunking().getOverlap(),
+                    "parent_size", properties.getChunking().getParentSize(),
+                    "child_size", properties.getChunking().getChildSize()));
         String version = StringUtils.hasText(request.getVersion()) ? request.getVersion() : "v1";
-        progress.accept("persisting",75);
-        Long docId = repository.insertDocument(title, storedPath.toString(), fileType, version, docMetadata, strategyMetadata, userId);
+        progress.accept("persisting", 75);
+        Long docId =
+            repository.insertDocument(
+                title,
+                storedPath.toString(),
+                fileType,
+                version,
+                docMetadata,
+                strategyMetadata,
+                userId);
 
         try {
             Map<Integer, Long> parentIds = new HashMap<>();
@@ -127,35 +171,59 @@ public class DocumentIngestionService {
                 Map<String, Object> metadata = chunkMetadata(docMetadata, chunk);
                 if ("parent".equals(chunk.getLevel())) {
                     parentIndex++;
-                    Long parentId = repository.insertChunk(docId, null, "parent", chunk.getContent(), null, metadata,
-                            request.getTargetMajor(), request.getTargetGrade());
+                    Long parentId =
+                        repository.insertChunk(
+                            docId,
+                            null,
+                            "parent",
+                            chunk.getContent(),
+                            null,
+                            metadata,
+                            request.getTargetMajor(),
+                            request.getTargetGrade());
                     parentIds.put(parentIndex, parentId);
                     parentCount++;
                 } else {
                     metadata.put("embedding_text_sha256", textHash(chunk.getContent()));
-                    Long parentId = chunk.getParentIndex() == null ? null : parentIds.get(chunk.getParentIndex());
+                    Long parentId =
+                        chunk.getParentIndex() == null
+                            ? null
+                            : parentIds.get(chunk.getParentIndex());
                     if ("parent_child".equals(chunker.strategy()) && parentId == null) {
-                        throw new IllegalStateException("Parent-child chunk has no persisted parent");
+                        throw new IllegalStateException(
+                            "Parent-child chunk has no persisted parent");
                     }
                     float[] embedding = childEmbeddings.get(embeddingIndex++);
-                    repository.insertChunk(docId, parentId, "child", chunk.getContent(), embedding, metadata,
-                            request.getTargetMajor(), request.getTargetGrade());
+                    repository.insertChunk(
+                        docId,
+                        parentId,
+                        "child",
+                        chunk.getContent(),
+                        embedding,
+                        metadata,
+                        request.getTargetMajor(),
+                        request.getTargetGrade());
                     childCount++;
-                    if(childCount%20==0) progress.accept("persisting",75+(int)(20.0*childCount/childTexts.size()));
+                    if (childCount % 20 == 0) {
+                        progress.accept(
+                            "persisting", 75 + (int) (20.0 * childCount / childTexts.size()));
+                    }
                 }
             }
-            progress.accept("publishing",97);
-            // Async jobs publish the new version atomically with their terminal state.
-            if(publish) repository.updateDocumentStatus(docId, "active");
+            progress.accept("publishing", 97);
+            // 异步任务在同一事务内发布新版本并提交任务终态。
+            if (publish) {
+                repository.updateDocumentStatus(docId, "active");
+            }
             return DocumentUploadResponseVO.builder()
-                    .docId(docId)
-                    .title(title)
-                    .fileType(fileType)
-                    .strategy(chunker.strategy())
-                    .parentChunks(parentCount)
-                    .childChunks(childCount)
-                    .status(publish?"active":"processing")
-                    .build();
+                .docId(docId)
+                .title(title)
+                .fileType(fileType)
+                .strategy(chunker.strategy())
+                .parentChunks(parentCount)
+                .childChunks(childCount)
+                .status(publish ? "active" : "processing")
+                .build();
         } catch (RuntimeException e) {
             repository.updateDocumentStatus(docId, "failed");
             throw e;
@@ -164,8 +232,12 @@ public class DocumentIngestionService {
 
     private String textHash(String text) {
         try {
-            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return java.util.HexFormat.of()
+                .formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(
+                            text.getBytes(
+                                java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException unavailable) {
             throw new IllegalStateException("SHA-256 is required", unavailable);
         }
@@ -173,14 +245,18 @@ public class DocumentIngestionService {
 
     private Path storeFile(MultipartFile file, String originalFilename) {
         try {
-            Path baseDir = Path.of(properties.getStorage().getLocalFileDir()).toAbsolutePath().normalize();
+            Path baseDir =
+                Path.of(properties.getStorage().getLocalFileDir()).toAbsolutePath().normalize();
             Files.createDirectories(baseDir);
-            String storedName = UUID.randomUUID() + "-" + originalFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
+            String storedName =
+                UUID.randomUUID() + "-" + originalFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
             Path target = baseDir.resolve(storedName).normalize();
             if (!target.startsWith(baseDir)) {
                 throw new IllegalArgumentException("Invalid file path");
             }
-            try(var input=file.getInputStream()) { Files.copy(input, target); }
+            try (var input = file.getInputStream()) {
+                Files.copy(input, target);
+            }
             return target;
         } catch (Exception e) {
             throw new IllegalArgumentException("Store file failed: " + e.getMessage(), e);
@@ -188,16 +264,21 @@ public class DocumentIngestionService {
     }
 
     private String noExtractableTextMessage(String originalFilename, MultipartFile file) {
-        return "Document has no extractable text. file=" + originalFilename
-                + ", size=" + file.getSize()
-                + ", contentType=" + file.getContentType()
-                + ". Please upload a text-based pdf/docx/xlsx/md/html/txt file. "
-                + "If this is a scanned PDF or image-only document, OCR is required before ingestion.";
+        return "Document has no extractable text. file="
+            + originalFilename
+            + ", size="
+            + file.getSize()
+            + ", contentType="
+            + file.getContentType()
+            + ". Please upload a text-based pdf/docx/xlsx/md/html/txt file. If this is a"
+            + " scanned PDF or image-only document, OCR is required before ingestion.";
     }
 
-    private Map<String, Object> docMetadata(DocumentUploadRequestDTO request, String originalFilename) {
+    private Map<String, Object> docMetadata(
+        DocumentUploadRequestDTO request, String originalFilename) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("file_name", originalFilename);
+        metadata.put("document_type", request.getDocumentType());
         metadata.put("department", request.getDepartment());
         metadata.put("effective_date", request.getEffectiveDate());
         metadata.put("target_major", request.getTargetMajor());

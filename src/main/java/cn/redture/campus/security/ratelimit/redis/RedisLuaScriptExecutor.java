@@ -25,8 +25,16 @@ public class RedisLuaScriptExecutor {
         this.tokenBucketScript.setResultType(List.class);
     }
 
-    public List<Long> executeTokenBucket(String key, long nowMs, long capacityScaled, long refillTokensScaled, long refillPeriodMs, long requestTokensScaled, long ttlMs) {
-        List<?> rawResult = stringRedisTemplate.execute(
+    public List<Long> executeTokenBucket(
+        String key,
+        long nowMs,
+        long capacityScaled,
+        long refillTokensScaled,
+        long refillPeriodMs,
+        long requestTokensScaled,
+        long ttlMs) {
+        List<?> rawResult =
+            stringRedisTemplate.execute(
                 tokenBucketScript,
                 Collections.singletonList(key),
                 String.valueOf(nowMs),
@@ -34,18 +42,14 @@ public class RedisLuaScriptExecutor {
                 String.valueOf(refillTokensScaled),
                 String.valueOf(refillPeriodMs),
                 String.valueOf(requestTokensScaled),
-                String.valueOf(ttlMs)
-        );
+                String.valueOf(ttlMs));
 
         if (rawResult == null || rawResult.size() < 3) {
             return List.of(0L, 0L, 1L);
         }
 
         return List.of(
-                toLong(rawResult.get(0)),
-                toLong(rawResult.get(1)),
-                toLong(rawResult.get(2))
-        );
+            toLong(rawResult.get(0)), toLong(rawResult.get(1)), toLong(rawResult.get(2)));
     }
 
     private long toLong(Object value) {

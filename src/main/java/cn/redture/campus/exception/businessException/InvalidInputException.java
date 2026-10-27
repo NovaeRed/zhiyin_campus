@@ -2,12 +2,13 @@ package cn.redture.campus.exception.businessException;
 
 import cn.redture.campus.constants.ErrorCodes;
 import cn.redture.campus.exception.BaseException;
+
 import org.springframework.http.HttpStatus;
 
 /**
  * 输入参数无效异常
- * <p>
- * 用于校验请求参数格式不正确等场景。
+ *
+ * <p>用于校验请求参数格式不正确等场景。
  */
 public class InvalidInputException extends BaseException {
 

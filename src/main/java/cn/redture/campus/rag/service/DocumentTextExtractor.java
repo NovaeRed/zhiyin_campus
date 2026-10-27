@@ -13,8 +13,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 public class DocumentTextExtractor {
@@ -25,19 +25,36 @@ public class DocumentTextExtractor {
         return extractDetailed(path, originalFilename, contentType, fileType).text();
     }
 
-    public record Extraction(String text, Map<String, Object> metadata) { }
+    public record Extraction(String text, Map<String, Object> metadata) {
+    }
 
-    public Extraction extractDetailed(Path path, String originalFilename, String contentType, String fileType) {
+    public Extraction extractDetailed(
+        Path path, String originalFilename, String contentType, String fileType) {
         try {
             if (PLAIN_TEXT_EXTENSIONS.contains(fileType)) {
-                return new Extraction(Files.readString(path, StandardCharsets.UTF_8), Map.of("extractor", "plain-text"));
+                return new Extraction(
+                    Files.readString(path, StandardCharsets.UTF_8),
+                    Map.of("extractor", "plain-text"));
             }
             if ("pdf".equals(fileType)) {
                 var result = PdfLayoutTextExtractor.extract(path);
-                return new Extraction(result.text(), Map.of("extractor", "pdf-layout-v1", "pages", result.pages(),
-                        "detected_course_rows", result.detectedRows(), "validated_course_rows", result.acceptedRows(),
-                        "review_required", !result.issues().isEmpty(), "issues", result.issues(),
-                        "replacement_characters", result.text().chars().filter(c -> c == 0xFFFD).count()));
+                return new Extraction(
+                    result.text(),
+                    Map.of(
+                        "extractor",
+                        "pdf-layout-v1",
+                        "pages",
+                        result.pages(),
+                        "detected_course_rows",
+                        result.detectedRows(),
+                        "validated_course_rows",
+                        result.acceptedRows(),
+                        "review_required",
+                        !result.issues().isEmpty(),
+                        "issues",
+                        result.issues(),
+                        "replacement_characters",
+                        result.text().chars().filter(c -> c == 0xFFFD).count()));
             }
 
             AutoDetectParser parser = new AutoDetectParser();

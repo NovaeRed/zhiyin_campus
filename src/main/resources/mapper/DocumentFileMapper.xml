@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.redture.campus.mapper.DocumentFileMapper">
+
+    <select id="selectFilePath" resultType="string" useCache="false" flushCache="true">
+        SELECT file_path
+        FROM knowledge_docs
+        WHERE id=#{docId,jdbcType=BIGINT}
+    </select>
+</mapper>

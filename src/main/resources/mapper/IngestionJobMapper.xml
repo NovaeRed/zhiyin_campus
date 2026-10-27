@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.redture.campus.mapper.IngestionJobMapper">
+
+    <!-- 任务领取与状态检查必须在调用方事务中执行，每次实际访问数据库并取得相应行锁。 -->
+
+    <select id="lockDocumentVersion" resultType="map" useCache="false" flushCache="true">
+        SELECT version
+        FROM knowledge_docs
+        WHERE id=#{docId,jdbcType=BIGINT}
+        AND metadata-&gt;&gt;'deleted_at' IS NULL
+        FOR UPDATE
+    </select>
+
+    <insert id="insertJob">
+        INSERT INTO app_ingestion_jobs(id,user_id,source_path,original_name,request,state,rebuild_of)
+        VALUES (#{id,jdbcType=OTHER},#{userId,jdbcType=BIGINT},#{sourcePath,jdbcType=VARCHAR},#{originalName,jdbcType=VARCHAR},#{request,jdbcType=VARCHAR}::jsonb,'queued',#{rebuildOf,jdbcType=BIGINT})
+    </insert>
+
+    <select id="selectStatus" resultType="map" useCache="false" flushCache="true">
+        SELECT id,user_id,state,phase,progress,attempt,error_code,result,rebuild_of,created_at,updated_at
+        FROM app_ingestion_jobs
+        WHERE id=#{id,jdbcType=OTHER}
+        AND (user_id=#{userId,jdbcType=BIGINT} OR #{admin,jdbcType=BOOLEAN})
+    </select>
+
+    <update id="retryJob">
+        UPDATE app_ingestion_jobs
+        SET state='queued',phase='queued',progress=0,error_code=NULL,result=NULL,updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='failed'
+        AND attempt&lt;3
+    </update>
+
+    <update id="cancelJob">
+        UPDATE app_ingestion_jobs
+        SET state='cancelled',updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state IN ('queued','processing')
+    </update>
+
+    <select id="lockNextQueuedJob" resultType="map" useCache="false" flushCache="true">
+        SELECT *
+        FROM app_ingestion_jobs
+        WHERE state='queued'
+        ORDER BY created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+    </select>
+
+    <update id="startJob">
+        UPDATE app_ingestion_jobs
+        SET state='processing',phase='starting',attempt=attempt+1,instance_id=#{instanceId,jdbcType=OTHER},lease_until=now()+interval '2 minutes',updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+    </update>
+
+    <update id="updateProgress">
+        UPDATE app_ingestion_jobs
+        SET phase=#{phase,jdbcType=VARCHAR},progress=#{progress,jdbcType=INTEGER},updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='processing'
+    </update>
+
+    <select id="lockState" resultType="string" useCache="false" flushCache="true">
+        SELECT state
+        FROM app_ingestion_jobs
+        WHERE id=#{id,jdbcType=OTHER}
+        FOR UPDATE
+    </select>
+
+    <update id="completeJob">
+        UPDATE app_ingestion_jobs
+        SET state='completed',phase='completed',progress=100,result=#{result,jdbcType=VARCHAR}::jsonb,updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+    </update>
+
+    <update id="failJob">
+        UPDATE app_ingestion_jobs
+        SET state='failed',error_code=#{errorCode,jdbcType=VARCHAR},updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='processing'
+    </update>
+
+    <update id="renewLease">
+        UPDATE app_ingestion_jobs
+        SET lease_until=now()+interval '2 minutes'
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='processing'
+        AND instance_id=#{instanceId,jdbcType=OTHER}
+    </update>
+
+    <update id="expireJobs">
+        UPDATE app_ingestion_jobs
+        SET state='failed',error_code='WORKER_INTERRUPTED',updated_at=now()
+        WHERE state='processing'
+        AND lease_until&lt;now()
+    </update>
+</mapper>

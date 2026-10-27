@@ -3,8 +3,11 @@ package cn.redture.campus.util;
 import cn.redture.campus.constants.RedisConstants;
 import cn.redture.campus.pojo.dto.TokenResponseDTO;
 import cn.redture.campus.pojo.entity.User;
+
 import jakarta.annotation.Resource;
+
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,8 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Token 管理工具类
- * 负责处理 Token 黑名单和刷新 Token 的失效
+ * Token 管理工具类 负责处理 Token 黑名单和刷新 Token 的失效
  */
 @Slf4j
 @Component
@@ -37,7 +39,9 @@ public class TokenManagementUtil {
             // 只将尚未自然过期的 token 加入黑名单
             if (remainingSeconds > 0) {
                 String key = RedisConstants.AUTH_JWT_BLACKLIST_KEY_PREFIX + jti;
-                stringRedisTemplate.opsForValue().set(key, "1", Duration.ofSeconds(remainingSeconds));
+                stringRedisTemplate
+                    .opsForValue()
+                    .set(key, "1", Duration.ofSeconds(remainingSeconds));
             }
         } catch (Exception ignored) {
         }
@@ -79,12 +83,12 @@ public class TokenManagementUtil {
         long ttlMillis = jwtUtil.getRefreshTokenExpirationSeconds() * 1000L;
         String refreshToken = jwtUtil.generateRefreshToken(userId, ttlMillis);
         String key = RedisConstants.AUTH_REFRESH_TOKEN_KEY_PREFIX + userId;
-        stringRedisTemplate.opsForValue().set(
+        stringRedisTemplate
+            .opsForValue()
+            .set(
                 key,
                 refreshToken,
-                Duration.ofSeconds(jwtUtil.getRefreshTokenExpirationSeconds())
-        );
+                Duration.ofSeconds(jwtUtil.getRefreshTokenExpirationSeconds()));
         return refreshToken;
     }
 }
-

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.redture.campus.mapper.ReliableRagMapper">
+
+    <!-- 返回结果的写语句必须声明 affectData；锁与状态查询禁用查询缓存，避免复用过期状态。 -->
+
+    <select id="claimRequest" resultType="map" useCache="false" flushCache="true" affectData="true">
+        INSERT INTO app_rag_requests(id,user_id,request_key,request_hash,state,instance_id)
+        VALUES (#{id,jdbcType=OTHER},#{userId,jdbcType=BIGINT},#{requestKey,jdbcType=VARCHAR},#{requestHash,jdbcType=VARCHAR},'running',#{instanceId,jdbcType=OTHER})
+        ON CONFLICT(user_id,request_key) DO NOTHING
+        RETURNING id
+    </select>
+
+    <select id="lockRequest" resultType="map" useCache="false" flushCache="true">
+        SELECT *
+        FROM app_rag_requests
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+        AND request_key=#{requestKey,jdbcType=VARCHAR}
+        FOR UPDATE
+    </select>
+
+    <select id="lockVisibleSession" resultType="map" useCache="false" flushCache="true">
+        SELECT id
+        FROM rag_sessions
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+        AND user_id=#{userId,jdbcType=BIGINT}
+        AND target_scope-&gt;&gt;'deletedAt' IS NULL
+        FOR SHARE
+    </select>
+
+    <select id="lockSession" resultType="boolean" useCache="false" flushCache="true">
+        SELECT pg_advisory_xact_lock(#{sessionId,jdbcType=BIGINT}) IS NULL
+    </select>
+
+    <select id="hasRunningRequest" resultType="boolean" useCache="false" flushCache="true">
+        SELECT EXISTS(SELECT 1
+        FROM app_rag_requests
+        WHERE session_id=#{sessionId,jdbcType=BIGINT}
+        AND state='running')
+    </select>
+
+    <update id="attachQuery">
+        UPDATE app_rag_requests
+        SET session_id=#{sessionId,jdbcType=BIGINT},query_id=#{queryId,jdbcType=BIGINT}
+        WHERE id=#{id,jdbcType=OTHER}
+    </update>
+
+    <update id="completeRequest">
+        UPDATE app_rag_requests
+        SET state='completed',response=#{response,jdbcType=VARCHAR}::jsonb,updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='running'
+    </update>
+
+    <update id="failRequest">
+        UPDATE app_rag_requests
+        SET state='failed',error_code=#{errorCode,jdbcType=VARCHAR},updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='running'
+    </update>
+
+    <update id="failQuery">
+        UPDATE rag_queries
+        SET workflow_state=CASE WHEN EXISTS(SELECT 1
+        FROM app_rag_requests
+        WHERE id=#{requestId,jdbcType=OTHER}
+        AND state='cancelled') THEN 'cancelled' ELSE 'failed' END,error_code=#{errorCode,jdbcType=VARCHAR},completed_at=now()
+        WHERE id=#{queryId,jdbcType=BIGINT}
+    </update>
+
+    <select id="selectScope" resultType="string" useCache="false" flushCache="true">
+        SELECT target_scope::text
+        FROM rag_sessions
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+        AND user_id=#{userId,jdbcType=BIGINT}
+    </select>
+
+    <select id="selectProfile" resultType="map" useCache="false" flushCache="true">
+        SELECT major,grade,target_cohort
+        FROM student_profiles
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+    </select>
+
+    <select id="selectRecentTurns" resultType="map" useCache="false" flushCache="true">
+        SELECT q.original_query,q.rewritten_query,g.generated_answer
+        FROM rag_queries q
+        JOIN generation_traces g ON g.query_id=q.id
+        JOIN rag_sessions s ON s.id=q.session_id
+        WHERE s.id=#{sessionId,jdbcType=BIGINT}
+        AND s.user_id=#{userId,jdbcType=BIGINT}
+        AND q.workflow_state='completed'
+        ORDER BY q.id DESC
+        LIMIT 3
+    </select>
+
+    <update id="updateScope">
+        UPDATE rag_sessions
+        SET target_scope=#{scope,jdbcType=VARCHAR}::jsonb,updated_at=now()
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+    </update>
+
+    <select id="selectStatus" resultType="map" useCache="false" flushCache="true">
+        SELECT r.id,r.request_key,r.state,r.error_code,r.session_id,r.query_id,r.response,r.created_at,r.updated_at
+        FROM app_rag_requests r
+        LEFT JOIN rag_sessions s ON s.id=r.session_id
+        WHERE r.user_id=#{userId,jdbcType=BIGINT}
+        AND r.request_key=#{requestKey,jdbcType=VARCHAR}
+        AND (r.session_id IS NULL OR s.target_scope-&gt;&gt;'deletedAt' IS NULL)
+    </select>
+
+    <select id="cancelRequest" resultType="map" useCache="false" flushCache="true" affectData="true">
+        UPDATE app_rag_requests
+        SET state='cancelled',updated_at=now()
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+        AND request_key=#{requestKey,jdbcType=VARCHAR}
+        AND state='running'
+        AND EXISTS(SELECT 1
+        FROM rag_sessions s
+        WHERE s.id=app_rag_requests.session_id
+        AND s.target_scope-&gt;&gt;'deletedAt' IS NULL)
+        RETURNING id,query_id
+    </select>
+
+    <update id="cancelQuery">
+        UPDATE rag_queries
+        SET workflow_state='cancelled',completed_at=now()
+        WHERE id=#{queryId,jdbcType=BIGINT}
+    </update>
+
+    <update id="timeoutRequest">
+        UPDATE app_rag_requests
+        SET state='failed',error_code='REQUEST_TIMEOUT',updated_at=now()
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='running'
+    </update>
+
+    <update id="timeoutQuery">
+        UPDATE rag_queries
+        SET workflow_state='failed',error_code='REQUEST_TIMEOUT',completed_at=now()
+        WHERE id=(SELECT query_id
+        FROM app_rag_requests
+        WHERE id=#{requestId,jdbcType=OTHER})
+    </update>
+
+    <update id="renewLease">
+        UPDATE app_rag_requests
+        SET lease_until=now()+interval '2 minutes'
+        WHERE id=#{id,jdbcType=OTHER}
+        AND state='running'
+        AND instance_id=#{instanceId,jdbcType=OTHER}
+    </update>
+
+    <select id="expireRequests" resultType="map" useCache="false" flushCache="true" affectData="true">
+        UPDATE app_rag_requests
+        SET state='failed',error_code='WORKER_INTERRUPTED',updated_at=now()
+        WHERE state='running'
+        AND lease_until&lt;now()
+        RETURNING query_id
+    </select>
+
+    <update id="interruptQuery">
+        UPDATE rag_queries
+        SET workflow_state='failed',error_code='WORKER_INTERRUPTED',completed_at=now()
+        WHERE id=#{queryId,jdbcType=BIGINT}
+    </update>
+</mapper>

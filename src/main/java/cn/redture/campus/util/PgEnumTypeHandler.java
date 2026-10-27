@@ -1,6 +1,7 @@
 package cn.redture.campus.util;
 
 import cn.redture.campus.annotation.PgEnum;
+
 import org.apache.ibatis.type.BaseTypeHandler;
 import org.apache.ibatis.type.JdbcType;
 import org.postgresql.util.PGobject;
@@ -24,7 +25,8 @@ public class PgEnumTypeHandler<E extends Enum<E>> extends BaseTypeHandler<E> {
     }
 
     @Override
-    public void setNonNullParameter(PreparedStatement ps, int i, E parameter, JdbcType jdbcType) throws SQLException {
+    public void setNonNullParameter(PreparedStatement ps, int i, E parameter, JdbcType jdbcType)
+        throws SQLException {
         PGobject pgObject = new PGobject();
         pgObject.setType(pgEnumTypeName);
         pgObject.setValue(parameter.name());

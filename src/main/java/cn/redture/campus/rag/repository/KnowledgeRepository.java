@@ -1,13 +1,13 @@
 package cn.redture.campus.rag.repository;
 
 import cn.redture.campus.mapper.KnowledgeMapper;
-import cn.redture.campus.rag.retrieval.RetrievedChunk;
-import cn.redture.campus.rag.retrieval.QueryTextNormalizer;
-import cn.redture.campus.rag.retrieval.AcademicScope;
 import cn.redture.campus.rag.retrieval.CurriculumDocument;
-import cn.redture.campus.rag.retrieval.CurriculumRoute;
+import cn.redture.campus.rag.retrieval.QueryTextNormalizer;
+import cn.redture.campus.rag.retrieval.RetrievedChunk;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -27,8 +27,14 @@ public class KnowledgeRepository {
         this.objectMapper = objectMapper;
     }
 
-    public Long insertDocument(String title, String filePath, String fileType, String version,
-                               Map<String, Object> metadata, Map<String, Object> chunkStrategy, Long createdBy) {
+    public Long insertDocument(
+        String title,
+        String filePath,
+        String fileType,
+        String version,
+        Map<String, Object> metadata,
+        Map<String, Object> chunkStrategy,
+        Long createdBy) {
         KnowledgeDocumentInsert record = new KnowledgeDocumentInsert();
         record.setTitle(title);
         record.setFilePath(filePath);
@@ -41,8 +47,15 @@ public class KnowledgeRepository {
         return record.getId();
     }
 
-    public Long insertChunk(Long docId, Long parentId, String level, String content, float[] embedding,
-                            Map<String, Object> metadata, String targetMajor, Integer targetGrade) {
+    public Long insertChunk(
+        Long docId,
+        Long parentId,
+        String level,
+        String content,
+        float[] embedding,
+        Map<String, Object> metadata,
+        String targetMajor,
+        Integer targetGrade) {
         DocChunkInsert record = new DocChunkInsert();
         record.setDocId(docId);
         record.setParentId(parentId);
@@ -64,8 +77,10 @@ public class KnowledgeRepository {
     public Long ensureSession(Long userId, Long sessionId) {
         if (sessionId != null) {
             if (knowledgeMapper.touchOwnedSession(sessionId, userId) != 1) {
-                throw new cn.redture.campus.exception.BaseException(org.springframework.http.HttpStatus.NOT_FOUND,
-                        "会话不存在或无权访问", "SESSION_NOT_FOUND");
+                throw new cn.redture.campus.exception.BaseException(
+                    org.springframework.http.HttpStatus.NOT_FOUND,
+                    "会话不存在或无权访问",
+                    "SESSION_NOT_FOUND");
             }
             return sessionId;
         }
@@ -85,19 +100,48 @@ public class KnowledgeRepository {
     public void completeQuery(Long queryId, double confidence) {
         knowledgeMapper.completeQuery(queryId, confidence);
     }
-    public void queryPhase(Long id,String phase) { knowledgeMapper.queryPhase(id,phase); }
-    public void rewriteQuery(Long id,String query) { knowledgeMapper.rewriteQuery(id,query); }
-    public void failQuery(Long id,String code) { knowledgeMapper.failQuery(id,code); }
 
-    public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade,
-                                               String targetCohort, int limit) {
+    public void queryPhase(Long id, String phase) {
+        knowledgeMapper.queryPhase(id, phase);
+    }
+
+    public void rewriteQuery(Long id, String query) {
+        knowledgeMapper.rewriteQuery(id, query);
+    }
+
+    public void failQuery(Long id, String code) {
+        knowledgeMapper.failQuery(id, code);
+    }
+
+    public void recordIntent(Long id, String domain, String task, boolean fallback) {
+        String category = (fallback ? "fallback:" : "") + domain + ":" + task;
+        knowledgeMapper.recordIntent(id, category.substring(0, Math.min(50, category.length())));
+    }
+
+    public List<RetrievedChunk> searchByVector(
+        float[] embedding,
+        String targetMajor,
+        Integer targetGrade,
+        String targetCohort,
+        int limit) {
         return searchByVector(embedding, targetMajor, targetGrade, targetCohort, limit, null);
     }
 
-    public List<RetrievedChunk> searchByVector(float[] embedding, String targetMajor, Integer targetGrade,
-                                               String targetCohort, int limit, List<Long> docIds) {
-        return knowledgeMapper.searchByVector(toVector(embedding), targetMajor, targetGrade, targetCohort, limit, docIds,
-                CurriculumRoute.excludedMajors(targetMajor, targetMajor == null ? List.of() : activeCurricula()));
+    public List<RetrievedChunk> searchByVector(
+        float[] embedding,
+        String targetMajor,
+        Integer targetGrade,
+        String targetCohort,
+        int limit,
+        List<Long> docIds) {
+        return knowledgeMapper.searchByVector(
+            toVector(embedding),
+            targetMajor,
+            targetGrade,
+            targetCohort,
+            limit,
+            docIds,
+            List.of());
     }
 
     public List<CurriculumDocument> activeCurricula() {
@@ -108,36 +152,56 @@ public class KnowledgeRepository {
         return knowledgeMapper.curriculumCourseChunks(docId);
     }
 
-    public List<RetrievedChunk> searchByKeyword(String query, String targetMajor, Integer targetGrade,
-                                                String targetCohort, int limit) {
+    public List<RetrievedChunk> searchByKeyword(
+        String query, String targetMajor, Integer targetGrade, String targetCohort, int limit) {
         return searchByKeyword(query, targetMajor, targetGrade, targetCohort, limit, null);
     }
 
-    public List<RetrievedChunk> searchByKeyword(String query, String targetMajor, Integer targetGrade,
-                                                String targetCohort, int limit, List<Long> docIds) {
-        AcademicScope scope = AcademicScope.resolve(query, targetGrade, targetCohort);
-        var catalog = activeCurricula();
-        String major = CurriculumRoute.effectiveMajor(query, targetMajor, catalog);
-        var route = CurriculumRoute.resolve(query, scope, catalog);
-        if (route.unavailable()) return List.of();
-        // Explicit query scope can narrow a caller-supplied allow-list, never widen it.
-        List<Long> allowed = route.docIds() == null ? docIds : docIds == null ? route.docIds()
-                : docIds.stream().filter(route.docIds()::contains).toList();
-        return knowledgeMapper.searchByKeyword(query, QueryTextNormalizer.keywords(query), major, scope.grade(),
-                scope.cohort(), limit, allowed, CurriculumRoute.excludedMajors(major, catalog));
+    public List<RetrievedChunk> searchByKeyword(
+        String query,
+        String targetMajor,
+        Integer targetGrade,
+        String targetCohort,
+        int limit,
+        List<Long> docIds) {
+        // Repository 只执行调用方已确定的条件，不再重新解释专业、年份或问题领域。
+        return knowledgeMapper.searchByKeyword(
+            query,
+            QueryTextNormalizer.keywords(query),
+            targetMajor,
+            targetGrade,
+            targetCohort,
+            limit,
+            docIds,
+            List.of());
     }
 
-    public void insertRetrievalTrace(Long queryId, List<RetrievedChunk> initial, List<RetrievedChunk> reranked,
-                                     int topK, double bm25Weight, double vectorWeight, double threshold) {
-        String selectedChunkIdsCsv = reranked.stream()
+    public void insertRetrievalTrace(
+        Long queryId,
+        List<RetrievedChunk> initial,
+        List<RetrievedChunk> reranked,
+        int topK,
+        double bm25Weight,
+        double vectorWeight,
+        double threshold) {
+        String selectedChunkIdsCsv =
+            reranked.stream()
                 .map(RetrievedChunk::getChunkId)
                 .map(String::valueOf)
                 .collect(Collectors.joining(","));
-        knowledgeMapper.upsertRetrievalTrace(queryId, toJson(initial), toJson(reranked), selectedChunkIdsCsv,
-                topK, bm25Weight, vectorWeight, threshold);
+        knowledgeMapper.upsertRetrievalTrace(
+            queryId,
+            toJson(initial),
+            toJson(reranked),
+            selectedChunkIdsCsv,
+            topK,
+            bm25Weight,
+            vectorWeight,
+            threshold);
     }
 
-    public void insertGenerationTrace(Long queryId, String model, String promptTemplate, String answer) {
+    public void insertGenerationTrace(
+        Long queryId, String model, String promptTemplate, String answer) {
         knowledgeMapper.upsertGenerationTrace(queryId, model, promptTemplate, answer);
     }
 
