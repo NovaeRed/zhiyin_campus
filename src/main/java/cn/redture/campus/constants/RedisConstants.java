@@ -11,5 +11,4 @@ public class RedisConstants {
      * JWT 黑名单 Redis Key：blacklist:jwt:<jti>
      */
     public static final String AUTH_JWT_BLACKLIST_KEY_PREFIX = "blacklist:jwt:";
-
 }

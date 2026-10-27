@@ -2,12 +2,16 @@ package cn.redture.campus.security.ratelimit;
 
 import cn.redture.campus.pojo.model.RestResult;
 import cn.redture.campus.security.ratelimit.core.RateLimitConsumeResult;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -28,7 +32,9 @@ public class EntryRateLimitFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+        HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
 
         RateLimitConsumeResult result = entryRateLimiterService.check(request);
         if (!result.allowed()) {
@@ -42,9 +48,10 @@ public class EntryRateLimitFilter extends OncePerRequestFilter {
             if (result.ruleName() != null && !result.ruleName().isBlank()) {
                 response.setHeader("X-RateLimit-Rule", result.ruleName());
             }
-            response.getWriter().write(objectMapper.writeValueAsString(
-                    RestResult.tooManyRequests("请求频繁，已触发入口限流，请稍后重试")
-            ));
+            response.getWriter()
+                .write(
+                    objectMapper.writeValueAsString(
+                        RestResult.tooManyRequests("请求频繁，已触发入口限流，请稍后重试")));
             return;
         }
 

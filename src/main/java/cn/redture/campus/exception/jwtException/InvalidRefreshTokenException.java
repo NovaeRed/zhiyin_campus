@@ -2,6 +2,7 @@ package cn.redture.campus.exception.jwtException;
 
 import cn.redture.campus.constants.ErrorCodes;
 import cn.redture.campus.exception.BaseException;
+
 import org.springframework.http.HttpStatus;
 
 /**
@@ -12,6 +13,3 @@ public class InvalidRefreshTokenException extends BaseException {
         super(HttpStatus.UNAUTHORIZED, message, ErrorCodes.REFRESH_TOKEN_INVALID);
     }
 }
-
-
-

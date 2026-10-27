@@ -1,15 +1,12 @@
 package cn.redture.campus.service;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import cn.redture.campus.util.SecurityContextHolderUtil;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-@Service
-public class OperationAuditService {
-    private final JdbcTemplate db; private final ObjectMapper json;
-    public OperationAuditService(JdbcTemplate db,ObjectMapper json){this.db=db;this.json=json;}
-    public void record(String action,String type,Object id,Object detail) {
-        try { db.update("INSERT INTO app_audit_events(actor_id,action,object_type,object_id,detail) VALUES (?,?,?,?,?::jsonb)",
-                SecurityContextHolderUtil.getUserId(),action,type,String.valueOf(id),json.writeValueAsString(detail)); }
-        catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
-    }
+
+/**
+ * 操作审计服务。
+ */
+public interface OperationAuditService {
+
+    /**
+     * 将当前操作者和变更详情写入审计记录，参与调用方已有事务。
+     */
+    void record(String action, String type, Object id, Object detail);
 }

@@ -1,6 +1,5 @@
 package cn.redture.campus.service.impl;
 
-
 import cn.redture.campus.constants.RedisConstants;
 import cn.redture.campus.exception.BaseException;
 import cn.redture.campus.exception.businessException.InvalidInputException;
@@ -17,16 +16,17 @@ import cn.redture.campus.service.AuthService;
 import cn.redture.campus.util.JwtUtil;
 import cn.redture.campus.util.RegexUtil;
 import cn.redture.campus.util.TokenManagementUtil;
-import com.alibaba.csp.sentinel.util.IdUtil;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import jakarta.annotation.Resource;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
-
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -51,21 +51,29 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public TokenResponseDTO register(RegisterRequestDTO request) {
-        if (request.getStudentNo() == null || request.getStudentNo().isBlank() || request.getStudentNo().length() > 32) {
+        if (request.getStudentNo() == null
+            || request.getStudentNo().isBlank()
+            || request.getStudentNo().length() > 32) {
             throw new InvalidInputException("学号长度应为1～32字符");
         }
-        if (request.getUsername() == null || request.getUsername().isBlank() || request.getUsername().length() > 50) {
+        if (request.getUsername() == null
+            || request.getUsername().isBlank()
+            || request.getUsername().length() > 50) {
             throw new InvalidInputException("用户名长度应为1～50字符");
         }
         // 检查学号是否已存在
-        Long count = userMapper.selectCount(new LambdaQueryWrapper<User>()
-                .eq(User::getStudentNo, request.getStudentNo())
-                .isNull(User::getDeletedAt));
+        Long count =
+            userMapper.selectCount(
+                new LambdaQueryWrapper<User>()
+                    .eq(User::getStudentNo, request.getStudentNo())
+                    .isNull(User::getDeletedAt));
         if (count != null && count > 0) {
             throw new BaseException(HttpStatus.CONFLICT, "学号已存在", "STUDENT_NO_EXISTS");
         }
 
-        if (request.getPassword() == null || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+        if (request.getPassword() == null
+            || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+            > 72) {
             throw new InvalidInputException("密码不能为空且UTF-8编码长度不能超过72字节");
         }
         if (!RegexUtil.isStrongPassword(request.getPassword())) {
@@ -83,7 +91,7 @@ public class AuthServiceImpl implements AuthService {
         try {
             userMapper.insert(user);
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
-            // The unique constraint also covers concurrent registrations and soft-deleted accounts.
+            // 唯一约束同时防止并发注册冲突以及复用软删除账号的学号。
             throw new BaseException(HttpStatus.CONFLICT, "学号已存在", "STUDENT_NO_EXISTS");
         }
 
@@ -92,14 +100,20 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public TokenResponseDTO login(LoginRequestDTO request) {
-        if (request.getStudentNo() == null || request.getStudentNo().isBlank() || request.getStudentNo().length() > 32
-                || request.getPassword() == null || request.getPassword().isBlank()
-                || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+        if (request.getStudentNo() == null
+            || request.getStudentNo().isBlank()
+            || request.getStudentNo().length() > 32
+            || request.getPassword() == null
+            || request.getPassword().isBlank()
+            || request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+            > 72) {
             throw new InvalidInputException("请提供有效学号和密码");
         }
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getStudentNo, request.getStudentNo())
-                .isNull(User::getDeletedAt));
+        User user =
+            userMapper.selectOne(
+                new LambdaQueryWrapper<User>()
+                    .eq(User::getStudentNo, request.getStudentNo())
+                    .isNull(User::getDeletedAt));
         if (user == null) {
             throw new BaseException(HttpStatus.UNAUTHORIZED, "学号或密码错误", "BAD_CREDENTIALS");
         }
@@ -189,6 +203,7 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * 生成一对新的访问令牌和刷新令牌
+     *
      * @param user 用户实体
      * @return TokenResponseDTO 包含新的访问令牌和刷新令牌
      */

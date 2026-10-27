@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.redture.campus.mapper.WorkflowManagementMapper">
+
+    <!-- 会话批量操作使用绑定参数；锁查询绕过缓存，事务边界保留在业务服务中。 -->
+
+    <select id="selectUsers" resultType="map" useCache="false" flushCache="true">
+        SELECT id,student_no,username,role,is_active,created_at
+        FROM users
+        WHERE deleted_at IS NULL
+        ORDER BY id
+        LIMIT #{limit,jdbcType=INTEGER}
+        OFFSET #{offset,jdbcType=INTEGER}
+    </select>
+
+    <select id="lockAdministratorChanges" resultType="boolean" useCache="false" flushCache="true">
+        SELECT pg_advisory_xact_lock(629781) IS NULL
+    </select>
+
+    <select id="lockUser" resultType="map" useCache="false" flushCache="true">
+        SELECT role,is_active
+        FROM users
+        WHERE id=#{userId,jdbcType=BIGINT}
+        AND deleted_at IS NULL
+        FOR UPDATE
+    </select>
+
+    <update id="updateUser">
+        UPDATE users
+        SET role=COALESCE(#{role,jdbcType=VARCHAR},role),is_active=COALESCE(#{active,jdbcType=BOOLEAN},is_active),updated_at=now()
+        WHERE id=#{userId,jdbcType=BIGINT}
+    </update>
+
+    <select id="selectProfile" resultType="map" useCache="false" flushCache="true">
+        SELECT major,grade,target_cohort
+        FROM student_profiles
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+    </select>
+
+    <insert id="upsertProfile">
+        INSERT INTO student_profiles(user_id,student_no,major,grade,target_cohort)
+        VALUES (#{userId,jdbcType=BIGINT},#{studentNo,jdbcType=VARCHAR},#{major,jdbcType=VARCHAR},#{grade,jdbcType=INTEGER},#{cohort,jdbcType=VARCHAR})
+        ON CONFLICT(user_id) DO UPDATE
+        SET major=EXCLUDED.major,grade=EXCLUDED.grade,target_cohort=EXCLUDED.target_cohort,synced_at=now()
+    </insert>
+
+    <select id="lockSession" resultType="map" useCache="false" flushCache="true">
+        SELECT id
+        FROM rag_sessions
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+        AND user_id=#{userId,jdbcType=BIGINT}
+        AND target_scope-&gt;&gt;'deletedAt' IS NULL
+        FOR UPDATE
+    </select>
+
+    <select id="hasRunningRequest" resultType="boolean" useCache="false" flushCache="true">
+        SELECT EXISTS(SELECT 1
+        FROM app_rag_requests
+        WHERE session_id=#{sessionId,jdbcType=BIGINT}
+        AND state='running')
+    </select>
+
+    <update id="updateSession">
+        UPDATE rag_sessions
+        SET title=COALESCE(#{title,jdbcType=VARCHAR},title),archived=COALESCE(#{archived,jdbcType=BOOLEAN},archived),updated_at=now()
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+        AND user_id=#{userId,jdbcType=BIGINT}
+    </update>
+
+    <update id="updateScope">
+        UPDATE rag_sessions
+        SET target_scope=#{scope,jdbcType=VARCHAR}::jsonb
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+    </update>
+
+    <select id="lockSessions" resultType="map" useCache="false" flushCache="true">
+        SELECT id
+        FROM rag_sessions
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+        AND id IN (<foreach collection="ids" item="id" separator=",">#{id,jdbcType=BIGINT}</foreach>)
+        ORDER BY id
+        FOR UPDATE
+    </select>
+
+    <select id="hasRunningRequests" resultType="boolean" useCache="false" flushCache="true">
+        SELECT EXISTS(SELECT 1
+        FROM app_rag_requests
+        WHERE state='running'
+        AND session_id IN (<foreach collection="ids" item="id" separator=",">#{id,jdbcType=BIGINT}</foreach>))
+    </select>
+
+    <update id="deleteSessions">
+        UPDATE rag_sessions
+        SET archived=true,target_scope=target_scope||jsonb_build_object('deletedAt',now()),updated_at=now()
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+        AND id IN (<foreach collection="ids" item="id" separator=",">#{id,jdbcType=BIGINT}</foreach>)
+        AND target_scope-&gt;&gt;'deletedAt' IS NULL
+    </update>
+
+    <select id="selectArchived" resultType="map" useCache="false" flushCache="true">
+        SELECT id,title,archived,target_scope,updated_at
+        FROM rag_sessions
+        WHERE user_id=#{userId,jdbcType=BIGINT}
+        AND archived
+        AND target_scope-&gt;&gt;'deletedAt' IS NULL
+        ORDER BY updated_at DESC
+        LIMIT #{limit,jdbcType=INTEGER}
+        OFFSET #{offset,jdbcType=INTEGER}
+    </select>
+
+    <select id="selectScope" resultType="map" useCache="false" flushCache="true">
+        SELECT id,title,archived,target_scope
+        FROM rag_sessions
+        WHERE id=#{sessionId,jdbcType=BIGINT}
+        AND user_id=#{userId,jdbcType=BIGINT}
+        AND target_scope-&gt;&gt;'deletedAt' IS NULL
+    </select>
+
+    <select id="ownsCompletedQuery" resultType="boolean" useCache="false" flushCache="true">
+        SELECT EXISTS(SELECT 1
+        FROM rag_queries q
+        JOIN rag_sessions s ON s.id=q.session_id
+        WHERE q.id=#{queryId,jdbcType=BIGINT}
+        AND s.user_id=#{userId,jdbcType=BIGINT}
+        AND s.target_scope-&gt;&gt;'deletedAt' IS NULL
+        AND q.workflow_state='completed')
+    </select>
+
+    <insert id="upsertFeedback">
+        INSERT INTO app_rag_feedback(query_id,user_id,rating,comment)
+        VALUES (#{queryId,jdbcType=BIGINT},#{userId,jdbcType=BIGINT},#{rating,jdbcType=INTEGER},#{comment,jdbcType=VARCHAR})
+        ON CONFLICT(query_id,user_id) DO UPDATE
+        SET rating=EXCLUDED.rating,comment=EXCLUDED.comment,updated_at=now()
+    </insert>
+
+    <select id="selectAudits" resultType="map" useCache="false" flushCache="true">
+        SELECT id,actor_id,action,object_type,object_id,detail,created_at
+        FROM app_audit_events
+        ORDER BY id DESC
+        LIMIT #{limit,jdbcType=INTEGER}
+        OFFSET #{offset,jdbcType=INTEGER}
+    </select>
+
+    <select id="lockDocument" resultType="map" useCache="false" flushCache="true">
+        SELECT metadata::text AS metadata,status
+        FROM knowledge_docs
+        WHERE id=#{docId,jdbcType=BIGINT}
+        FOR UPDATE
+    </select>
+
+    <update id="updateDocument">
+        UPDATE knowledge_docs
+        SET title=#{title,jdbcType=VARCHAR},version=#{version,jdbcType=VARCHAR},updated_at=now()
+        WHERE id=#{docId,jdbcType=BIGINT}
+        AND status IN ('active','deprecated')
+    </update>
+
+    <update id="updateDocumentMetadata">
+        UPDATE knowledge_docs
+        SET metadata=COALESCE(metadata,'{}'::jsonb)||#{metadata,jdbcType=VARCHAR}::jsonb
+        WHERE id=#{docId,jdbcType=BIGINT}
+    </update>
+
+    <update id="updateChunkMetadata">
+        UPDATE doc_chunks
+        SET target_major=#{major,jdbcType=VARCHAR},target_grade=#{grade,jdbcType=INTEGER},metadata=COALESCE(metadata,'{}'::jsonb)||#{metadata,jdbcType=VARCHAR}::jsonb
+        WHERE doc_id=#{docId,jdbcType=BIGINT}
+    </update>
+</mapper>

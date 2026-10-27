@@ -2,7 +2,9 @@ package cn.redture.campus.config;
 
 import cn.redture.campus.security.JwtAuthenticationFilter;
 import cn.redture.campus.security.ratelimit.EntryRateLimitFilter;
+
 import jakarta.servlet.DispatcherType;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,39 +25,51 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http,
-                                           EntryRateLimitFilter entryRateLimitFilter,
-                                           JwtAuthenticationFilter jwtFilter,
-                                           com.fasterxml.jackson.databind.ObjectMapper objectMapper) throws Exception {
-        http
-                .cors(org.springframework.security.config.Customizer.withDefaults())
-                .csrf(AbstractHttpConfigurer::disable) // 前后端分离，关闭 CSRF
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
-                    response.setStatus(401);
-                    response.setContentType("application/json;charset=UTF-8");
-                    objectMapper.writeValue(response.getOutputStream(), cn.redture.campus.pojo.model.RestResult.unauthorized("请先登录"));
-                }))
-                .authorizeHttpRequests(auth -> auth
-                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+    public SecurityFilterChain filterChain(
+        HttpSecurity http,
+        EntryRateLimitFilter entryRateLimitFilter,
+        JwtAuthenticationFilter jwtFilter,
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper)
+        throws Exception {
+        http.cors(org.springframework.security.config.Customizer.withDefaults())
+            .csrf(AbstractHttpConfigurer::disable) // 前后端分离，关闭 CSRF
+            .sessionManagement(
+                session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(
+                errors ->
+                    errors.authenticationEntryPoint(
+                        (request, response, exception) -> {
+                            response.setStatus(401);
+                            response.setContentType(
+                                "application/json;charset=UTF-8");
+                            objectMapper.writeValue(
+                                response.getOutputStream(),
+                                cn.redture.campus.pojo.model.RestResult
+                                    .unauthorized("请先登录"));
+                        }))
+            .authorizeHttpRequests(
+                auth ->
+                    auth.dispatcherTypeMatchers(DispatcherType.ASYNC)
+                        .permitAll()
                         .requestMatchers(
-                                "/auth/login",
-                                "/auth/register",
-                                "/auth/refresh",
-                                "/auth/logout"
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
-                    .addFilterBefore(entryRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-                    .addFilterAfter(jwtFilter, EntryRateLimitFilter.class)
-                .httpBasic(AbstractHttpConfigurer::disable) // 禁用 Basic Auth
-                .formLogin(AbstractHttpConfigurer::disable); // 禁用表单登录
+                            "/auth/login",
+                            "/auth/register",
+                            "/auth/refresh",
+                            "/auth/logout")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
+            .addFilterBefore(entryRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(jwtFilter, EntryRateLimitFilter.class)
+            .httpBasic(AbstractHttpConfigurer::disable) // 禁用 Basic Auth
+            .formLogin(AbstractHttpConfigurer::disable); // 禁用表单登录
 
         return http.build();
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration)
+        throws Exception {
         return configuration.getAuthenticationManager();
     }
 

@@ -3,8 +3,9 @@ package cn.redture.campus.mapper;
 import cn.redture.campus.rag.repository.DocChunkInsert;
 import cn.redture.campus.rag.repository.KnowledgeDocumentInsert;
 import cn.redture.campus.rag.repository.RagQueryInsert;
-import cn.redture.campus.rag.retrieval.RetrievedChunk;
 import cn.redture.campus.rag.retrieval.CurriculumDocument;
+import cn.redture.campus.rag.retrieval.RetrievedChunk;
+
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -16,14 +17,24 @@ import java.util.List;
 
 @Mapper
 public interface KnowledgeMapper {
-    @Update("UPDATE rag_queries SET failure_stage=#{phase} WHERE id=#{id} AND workflow_state NOT IN ('cancelled','failed')")
-    void queryPhase(@Param("id") Long id,@Param("phase") String phase);
-    @Update("UPDATE rag_queries SET rewritten_query=#{query} WHERE id=#{id}")
-    void rewriteQuery(@Param("id") Long id,@Param("query") String query);
-    @Update("UPDATE rag_queries SET workflow_state='failed',error_code=#{code},completed_at=now() WHERE id=#{id} AND workflow_state<>'cancelled'")
-    void failQuery(@Param("id") Long id,@Param("code") String code);
+    @Update("UPDATE rag_queries SET intent_category=#{category} WHERE id=#{id}")
+    void recordIntent(@Param("id") Long id, @Param("category") String category);
 
-    @Select("""
+    @Update(
+        "UPDATE rag_queries SET failure_stage=#{phase} WHERE id=#{id} AND workflow_state NOT IN"
+            + " ('cancelled','failed')")
+    void queryPhase(@Param("id") Long id, @Param("phase") String phase);
+
+    @Update("UPDATE rag_queries SET rewritten_query=#{query} WHERE id=#{id}")
+    void rewriteQuery(@Param("id") Long id, @Param("query") String query);
+
+    @Update(
+        "UPDATE rag_queries SET workflow_state='failed',error_code=#{code},completed_at=now()"
+            + " WHERE id=#{id} AND workflow_state<>'cancelled'")
+    void failQuery(@Param("id") Long id, @Param("code") String code);
+
+    @Select(
+        """
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
               COALESCE(p.content,c.content) AS content,c.content AS "matchedContent",c.target_grade AS "targetGrade",
               c.metadata::text AS metadata
@@ -36,18 +47,27 @@ public interface KnowledgeMapper {
             """)
     List<RetrievedChunk> curriculumCourseChunks(@Param("docId") Long docId);
 
-    @Select("""
-            SELECT d.id AS "docId", d.title, MIN(c.target_grade) AS "targetGrade", MIN(c.target_major) AS "targetMajor"
+    @Select(
+        """
+            SELECT d.id AS "docId", d.title, MIN(c.target_grade) AS "targetGrade", MIN(c.target_major) AS "targetMajor",
+                   d.metadata->>'target_cohort' AS "targetCohort"
             FROM knowledge_docs d JOIN doc_chunks c ON c.doc_id = d.id
             WHERE d.status = 'active' AND c.doc_status = 'active' AND c.chunk_level = 'child'
               AND d.metadata->>'deleted_at' IS NULL
               AND c.target_grade IS NOT NULL
+              AND (d.metadata->>'document_type' = 'curriculum'
+                   OR (NULLIF(d.metadata->>'document_type','') IS NULL AND EXISTS (
+                       SELECT 1 FROM doc_chunks evidence WHERE evidence.doc_id=d.id
+                         AND evidence.chunk_level='child' AND evidence.doc_status='active'
+                         AND evidence.metadata->>'chunk_type'='table'
+                         AND evidence.content LIKE '%[TABLE_ROW %')))
             GROUP BY d.id HAVING COUNT(DISTINCT c.target_grade) = 1 AND COUNT(DISTINCT c.target_major) <= 1
             ORDER BY d.id
             """)
     List<CurriculumDocument> activeCurricula();
 
-    @Insert("""
+    @Insert(
+        """
             INSERT INTO knowledge_docs(title, file_path, file_type, version, status, metadata, chunk_strategy, created_by)
             VALUES (#{title}, #{filePath}, #{fileType}, #{version}, 'processing',
                     #{metadataJson}::jsonb, #{chunkStrategyJson}::jsonb, #{createdBy,jdbcType=BIGINT})
@@ -55,7 +75,8 @@ public interface KnowledgeMapper {
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     void insertDocument(KnowledgeDocumentInsert record);
 
-    @Insert("""
+    @Insert(
+        """
             INSERT INTO doc_chunks(doc_id, parent_id, chunk_level, content, embedding, metadata,
                                    target_major, target_grade, doc_status)
             VALUES (#{docId}, #{parentId,jdbcType=BIGINT}, #{level}, #{content}, #{embeddingVector,jdbcType=VARCHAR}::vector,
@@ -73,27 +94,34 @@ public interface KnowledgeMapper {
     @Update("UPDATE rag_sessions SET updated_at = NOW() WHERE id = #{sessionId}")
     int touchSession(@Param("sessionId") Long sessionId);
 
-    @Update("UPDATE rag_sessions SET updated_at = NOW() WHERE id = #{sessionId} AND user_id = #{userId} AND NOT archived AND target_scope->>'deletedAt' IS NULL")
+    @Update(
+        "UPDATE rag_sessions SET updated_at = NOW() WHERE id = #{sessionId} AND user_id ="
+            + " #{userId} AND NOT archived AND target_scope->>'deletedAt' IS NULL")
     int touchOwnedSession(@Param("sessionId") Long sessionId, @Param("userId") Long userId);
 
-    @Select("INSERT INTO rag_sessions(user_id, created_at, updated_at) VALUES (#{userId}, NOW(), NOW()) RETURNING id")
+    @Select(
+        "INSERT INTO rag_sessions(user_id, created_at, updated_at) VALUES (#{userId}, NOW(),"
+            + " NOW()) RETURNING id")
     Long insertSession(@Param("userId") Long userId);
 
-    @Insert("""
+    @Insert(
+        """
             INSERT INTO rag_queries(session_id, trace_id, original_query, rewritten_query, workflow_state)
             VALUES (#{sessionId}, #{traceId}, #{originalQuery}, #{rewrittenQuery}, 'retrieving')
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     void insertQuery(RagQueryInsert record);
 
-    @Update("""
+    @Update(
+        """
             UPDATE rag_queries
             SET workflow_state = 'completed', final_confidence = #{confidence}, completed_at = NOW()
             WHERE id = #{queryId} AND workflow_state NOT IN ('cancelled','failed')
             """)
     int completeQuery(@Param("queryId") Long queryId, @Param("confidence") double confidence);
 
-    @Select("""
+    @Select(
+        """
             <script>
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
                    COALESCE(p.content, c.content) AS content, c.content AS "matchedContent", c.target_grade AS "targetGrade",
@@ -130,14 +158,17 @@ public interface KnowledgeMapper {
             LIMIT #{limit}
             </script>
             """)
-    List<RetrievedChunk> searchByVector(@Param("embeddingVector") String embeddingVector,
-                                        @Param("targetMajor") String targetMajor,
-                                        @Param("targetGrade") Integer targetGrade,
-                                        @Param("targetCohort") String targetCohort,
-                                        @Param("limit") int limit, @Param("docIds") List<Long> docIds,
-                                        @Param("excludedDocIds") List<Long> excludedDocIds);
+    List<RetrievedChunk> searchByVector(
+        @Param("embeddingVector") String embeddingVector,
+        @Param("targetMajor") String targetMajor,
+        @Param("targetGrade") Integer targetGrade,
+        @Param("targetCohort") String targetCohort,
+        @Param("limit") int limit,
+        @Param("docIds") List<Long> docIds,
+        @Param("excludedDocIds") List<Long> excludedDocIds);
 
-    @Select("""
+    @Select(
+        """
             <script>
             WITH scored AS (
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
@@ -199,15 +230,18 @@ public interface KnowledgeMapper {
             LIMIT #{limit}
             </script>
             """)
-    List<RetrievedChunk> searchByKeyword(@Param("query") String query,
-                                         @Param("keywords") List<String> keywords,
-                                         @Param("targetMajor") String targetMajor,
-                                         @Param("targetGrade") Integer targetGrade,
-                                         @Param("targetCohort") String targetCohort,
-                                         @Param("limit") int limit, @Param("docIds") List<Long> docIds,
-                                         @Param("excludedDocIds") List<Long> excludedDocIds);
+    List<RetrievedChunk> searchByKeyword(
+        @Param("query") String query,
+        @Param("keywords") List<String> keywords,
+        @Param("targetMajor") String targetMajor,
+        @Param("targetGrade") Integer targetGrade,
+        @Param("targetCohort") String targetCohort,
+        @Param("limit") int limit,
+        @Param("docIds") List<Long> docIds,
+        @Param("excludedDocIds") List<Long> excludedDocIds);
 
-    @Insert("""
+    @Insert(
+        """
             INSERT INTO retrieval_traces(query_id, initial_retrieval, reranked_result, selected_chunk_ids,
                                          top_k, bm25_weight, vector_weight, rerank_threshold)
             VALUES (#{queryId}, #{initialJson}::jsonb, #{rerankedJson}::jsonb,
@@ -221,22 +255,25 @@ public interface KnowledgeMapper {
               reranked_result = EXCLUDED.reranked_result,
               selected_chunk_ids = EXCLUDED.selected_chunk_ids
             """)
-    int upsertRetrievalTrace(@Param("queryId") Long queryId,
-                             @Param("initialJson") String initialJson,
-                             @Param("rerankedJson") String rerankedJson,
-                             @Param("selectedChunkIdsCsv") String selectedChunkIdsCsv,
-                             @Param("topK") int topK,
-                             @Param("bm25Weight") double bm25Weight,
-                             @Param("vectorWeight") double vectorWeight,
-                             @Param("threshold") double threshold);
+    int upsertRetrievalTrace(
+        @Param("queryId") Long queryId,
+        @Param("initialJson") String initialJson,
+        @Param("rerankedJson") String rerankedJson,
+        @Param("selectedChunkIdsCsv") String selectedChunkIdsCsv,
+        @Param("topK") int topK,
+        @Param("bm25Weight") double bm25Weight,
+        @Param("vectorWeight") double vectorWeight,
+        @Param("threshold") double threshold);
 
-    @Insert("""
+    @Insert(
+        """
             INSERT INTO generation_traces(query_id, llm_model, prompt_template, generated_answer)
             VALUES (#{queryId}, #{model}, #{promptTemplate}, #{answer})
             ON CONFLICT (query_id) DO UPDATE SET generated_answer = EXCLUDED.generated_answer
             """)
-    int upsertGenerationTrace(@Param("queryId") Long queryId,
-                              @Param("model") String model,
-                              @Param("promptTemplate") String promptTemplate,
-                              @Param("answer") String answer);
+    int upsertGenerationTrace(
+        @Param("queryId") Long queryId,
+        @Param("model") String model,
+        @Param("promptTemplate") String promptTemplate,
+        @Param("answer") String answer);
 }

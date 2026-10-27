@@ -3,26 +3,30 @@ package cn.redture.campus.util;
 import cn.redture.campus.exception.BaseException;
 import cn.redture.campus.exception.jwtException.ExpiredTokenException;
 import cn.redture.campus.exception.jwtException.InvalidTokenException;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+
 import jakarta.annotation.PostConstruct;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.crypto.SecretKey;
+
 /**
- * JWT (JSON Web Token) 工具类
- * 负责生成、解析和验证JWT
+ * JWT (JSON Web Token) 工具类 负责生成、解析和验证JWT
  */
 @Component
 @Slf4j
@@ -64,12 +68,12 @@ public class JwtUtil {
         Date expiryDate = new Date(now.getTime() + expiresInSeconds * 1000);
 
         return Jwts.builder()
-                .claims(claims)
-                .id(UUID.randomUUID().toString()) // 添加 JTI
-                .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(secretKey)
-                .compact();
+            .claims(claims)
+            .id(UUID.randomUUID().toString()) // 添加 JTI
+            .issuedAt(now)
+            .expiration(expiryDate)
+            .signWith(secretKey)
+            .compact();
     }
 
     /**
@@ -89,12 +93,12 @@ public class JwtUtil {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + ttlMillis);
         return Jwts.builder()
-                .claim("uid", userId)
-                .claim("typ", "refresh")
-                .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(secretKey)
-                .compact();
+            .claim("uid", userId)
+            .claim("typ", "refresh")
+            .issuedAt(now)
+            .expiration(expiryDate)
+            .signWith(secretKey)
+            .compact();
     }
 
     /**
@@ -108,10 +112,10 @@ public class JwtUtil {
     public Claims getClaimsFromToken(String token) {
         try {
             return Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
         } catch (ExpiredJwtException e) {
             throw new ExpiredTokenException("Token已过期", "TOKEN_EXPIRED");
         } catch (JwtException | IllegalArgumentException e) {
@@ -170,10 +174,10 @@ public class JwtUtil {
     private Claims getClaimsFromTokenIgnoringExpiration(String token) {
         try {
             return Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         } catch (JwtException | IllegalArgumentException e) {
@@ -182,8 +186,7 @@ public class JwtUtil {
     }
 
     /**
-     * 从可能已过期的 Access Token 中解析出 uid。
-     * 此方法不验证过期时间，但会验证签名。
+     * 从可能已过期的 Access Token 中解析出 uid。 此方法不验证过期时间，但会验证签名。
      */
     public Long getUserIdFromExpiredToken(String accessToken) {
         Claims claims = getClaimsFromTokenIgnoringExpiration(accessToken);
@@ -220,6 +223,7 @@ public class JwtUtil {
 
     /**
      * 从 token 中获取 JTI (JWT ID)
+     *
      * @param token JWT
      * @return JTI
      */
@@ -229,6 +233,7 @@ public class JwtUtil {
 
     /**
      * 计算 token 剩余的有效时间（秒）
+     *
      * @param token JWT
      * @return 剩余有效时间（秒），如果已过期或无效则返回 0
      */

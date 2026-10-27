@@ -2,9 +2,11 @@ package cn.redture.campus.rag.evaluation;
 
 import cn.redture.campus.mapper.EvaluationTraceMapper;
 import cn.redture.campus.rag.retrieval.RetrievedChunk;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -17,7 +19,8 @@ public class EvaluationService {
     private final ObjectMapper json;
     private final RetrievalEvaluator evaluator;
 
-    public EvaluationService(EvaluationTraceMapper mapper, ObjectMapper json, RetrievalEvaluator evaluator) {
+    public EvaluationService(
+        EvaluationTraceMapper mapper, ObjectMapper json, RetrievalEvaluator evaluator) {
         this.mapper = mapper;
         this.json = json;
         this.evaluator = evaluator;
@@ -32,21 +35,43 @@ public class EvaluationService {
     }
 
     public RetrievalSnapshot snapshot(Long queryId, Long userId) {
-        if (queryId == null || queryId < 1 || userId == null) throw new IllegalArgumentException("Invalid trace request");
-        RecordedRetrieval record = mapper.findOwnedTrace(queryId, userId);
-        if (record == null) throw new IllegalArgumentException("No completed retrieval trace available to this user");
-        if (record.getRecordedTopK() == null || record.getThreshold() == null) {
-            throw new IllegalArgumentException("Historical trace is missing its retrieval configuration");
+        if (queryId == null || queryId < 1 || userId == null) {
+            throw new IllegalArgumentException("Invalid trace request");
         }
-        return new RetrievalSnapshot(record.getQueryId(), record.getTraceId(), record.getQuestion(), record.getRewrittenQuery(),
-                record.getRecordedTopK(), record.getThreshold(), parse(record.getFusedJson()), parse(record.getSelectedJson()));
+        RecordedRetrieval record = mapper.findOwnedTrace(queryId, userId);
+        if (record == null) {
+            throw new IllegalArgumentException(
+                "No completed retrieval trace available to this user");
+        }
+        if (record.getRecordedTopK() == null || record.getThreshold() == null) {
+            throw new IllegalArgumentException(
+                "Historical trace is missing its retrieval configuration");
+        }
+        return new RetrievalSnapshot(
+            record.getQueryId(),
+            record.getTraceId(),
+            record.getQuestion(),
+            record.getRewrittenQuery(),
+            record.getRecordedTopK(),
+            record.getThreshold(),
+            parse(record.getFusedJson()),
+            parse(record.getSelectedJson()));
     }
 
     private List<RetrievedChunk> parse(String value) {
         try {
-            if (value == null) throw new IllegalArgumentException("Retrieval snapshot is missing");
-            List<RetrievedChunk> chunks = json.readValue(value, new TypeReference<>() { });
-            if (chunks == null || chunks.stream().anyMatch(c -> c == null || c.getChunkId() == null || c.getDocId() == null)) {
+            if (value == null) {
+                throw new IllegalArgumentException("Retrieval snapshot is missing");
+            }
+            List<RetrievedChunk> chunks = json.readValue(value, new TypeReference<>() {
+            });
+            if (chunks == null
+                || chunks.stream()
+                .anyMatch(
+                    c ->
+                        c == null
+                            || c.getChunkId() == null
+                            || c.getDocId() == null)) {
                 throw new IllegalArgumentException("Retrieval snapshot contains invalid chunks");
             }
             return chunks;

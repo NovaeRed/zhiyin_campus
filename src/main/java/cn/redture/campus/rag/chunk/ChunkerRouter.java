@@ -1,6 +1,7 @@
 package cn.redture.campus.rag.chunk;
 
 import cn.redture.campus.config.RagProperties;
+
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -14,15 +15,17 @@ public class ChunkerRouter {
 
     public ChunkerRouter(RagProperties properties) {
         this.properties = properties;
-        this.chunkers = Map.of(
+        this.chunkers =
+            Map.of(
                 "recursive", new RecursiveTextChunker(properties),
-                "parent_child", new ParentChildChunker(properties)
-        );
+                "parent_child", new ParentChildChunker(properties));
     }
 
     public DocumentChunker resolve(String requestedStrategy, String fileType) {
-        String strategy = StringUtils.hasText(requestedStrategy) ? requestedStrategy : autoStrategy(fileType);
-        return chunkers.getOrDefault(strategy, chunkers.get(properties.getChunking().getStrategy()));
+        String strategy =
+            StringUtils.hasText(requestedStrategy) ? requestedStrategy : autoStrategy(fileType);
+        return chunkers.getOrDefault(
+            strategy, chunkers.get(properties.getChunking().getStrategy()));
     }
 
     private String autoStrategy(String fileType) {

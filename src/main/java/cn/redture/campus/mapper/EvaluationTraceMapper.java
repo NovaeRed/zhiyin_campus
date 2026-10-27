@@ -8,7 +8,8 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface EvaluationTraceMapper {
-    @Select("""
+    @Select(
+        """
             SELECT q.id AS "queryId", q.trace_id AS "traceId", q.original_query AS question,
                    q.rewritten_query AS "rewrittenQuery", t.top_k AS "recordedTopK",
                    t.rerank_threshold AS threshold, t.initial_retrieval::text AS "fusedJson",

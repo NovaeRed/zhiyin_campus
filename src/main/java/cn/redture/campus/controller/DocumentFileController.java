@@ -1,16 +1,26 @@
 package cn.redture.campus.controller;
 
 import cn.redture.campus.service.DocumentFileService;
+
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class DocumentFileController {
     private final DocumentFileService files;
-    public DocumentFileController(DocumentFileService files){this.files=files;}
+
+    public DocumentFileController(DocumentFileService files) {
+        this.files = files;
+    }
+
     @GetMapping("/admin/documents/{id}/original")
-    public ResponseEntity<Resource> original(@PathVariable("id") long id,@RequestParam(name="download",defaultValue="false") boolean download) {
-        return files.original(id,download);
+    public ResponseEntity<Resource> original(
+        @PathVariable("id") long id,
+        @RequestParam(name = "download", defaultValue = "false") boolean download) {
+        return files.original(id, download);
     }
 }

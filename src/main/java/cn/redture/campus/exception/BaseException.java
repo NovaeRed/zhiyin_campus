@@ -2,6 +2,7 @@ package cn.redture.campus.exception;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
 import org.springframework.http.HttpStatus;
 
 /**

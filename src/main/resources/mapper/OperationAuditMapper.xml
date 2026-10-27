@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.redture.campus.mapper.OperationAuditMapper">
+
+    <insert id="insertEvent">
+        INSERT INTO app_audit_events(actor_id,action,object_type,object_id,detail)
+        VALUES (#{actorId,jdbcType=BIGINT},#{action,jdbcType=VARCHAR},#{objectType,jdbcType=VARCHAR},#{objectId,jdbcType=VARCHAR},#{detail,jdbcType=VARCHAR}::jsonb)
+    </insert>
+</mapper>

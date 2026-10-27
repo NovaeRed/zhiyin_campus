@@ -1,8 +1,8 @@
 package cn.redture.campus.rag.retrieval;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
 @Data

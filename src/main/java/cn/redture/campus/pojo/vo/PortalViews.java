@@ -1,14 +1,23 @@
 package cn.redture.campus.pojo.vo;
 
 import lombok.Data;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
 public final class PortalViews {
-    private PortalViews() {}
-    public record Page<T>(List<T> items, long total, int page, int pageSize) {}
-    public record Account(Long id, String studentNo, String username, String role, boolean canManageDocuments) {}
-    @Data public static class Document {
+    private PortalViews() {
+    }
+
+    public record Page<T>(List<T> items, long total, int page, int pageSize) {
+    }
+
+    public record Account(
+        Long id, String studentNo, String username, String role, boolean canManageDocuments) {
+    }
+
+    @Data
+    public static class Document {
         private Long id;
         private String title;
         private String fileType;
@@ -22,7 +31,9 @@ public final class PortalViews {
         private long parentChunks;
         private long childChunks;
     }
-    @Data public static class Chunk {
+
+    @Data
+    public static class Chunk {
         private Long id;
         private Long parentId;
         private String chunkLevel;
@@ -32,13 +43,17 @@ public final class PortalViews {
         private Integer targetGrade;
         private String docStatus;
     }
-    @Data public static class Session {
+
+    @Data
+    public static class Session {
         private Long id;
         private String title;
         private long queryCount;
         private OffsetDateTime updatedAt;
     }
-    @Data public static class HistoryQuery {
+
+    @Data
+    public static class HistoryQuery {
         private Long queryId;
         private String question;
         private String state;

@@ -1,6 +1,5 @@
 package cn.redture.campus.security.ratelimit.core;
 
-
 import cn.redture.campus.security.ratelimit.EntryRateLimitProperties;
 
 /**

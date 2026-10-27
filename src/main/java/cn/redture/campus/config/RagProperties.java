@@ -1,6 +1,7 @@
 package cn.redture.campus.config;
 
 import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
@@ -23,10 +24,12 @@ public class RagProperties {
         private String apiKey;
         private String baseUrl;
         private String chatModel = "qwen-plus";
+
         /**
          * 稠密语义 embedding 模型，默认的 text-embedding-v4 适合中文校园政策 RAG 场景。
          */
         private String embeddingModel = "text-embedding-v4";
+
         private Integer embeddingDimension = 1024;
         private Float temperature = 0.2f;
         private Double topP = 0.8;
@@ -51,9 +54,14 @@ public class RagProperties {
         private double rerankThreshold = 0.1;
         private double minimumEvidenceCoverage = 0.1;
         private boolean queryPlanningEnabled = true;
-        /** Interpret colloquial academic intent against the actual curriculum catalog before routing. */
+
+        /**
+         * 路由前结合实际培养方案目录理解口语化的学业查询意图。
+         */
         private boolean semanticAcademicIntentEnabled = true;
+
         private int semanticAcademicIntentTimeoutSeconds = 20;
         private int maxExpandedQueries = 2;
+        private int maxAcademicScopes = 3;
     }
 }

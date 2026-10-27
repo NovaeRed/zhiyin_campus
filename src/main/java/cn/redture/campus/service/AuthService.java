@@ -18,6 +18,7 @@ public interface AuthService {
 
     /**
      * 登出当前用户。
+     *
      * @param authorizationHeader 认证请求头
      */
     void logout(String authorizationHeader);

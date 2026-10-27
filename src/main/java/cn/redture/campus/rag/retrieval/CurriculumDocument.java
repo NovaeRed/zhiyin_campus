@@ -8,4 +8,5 @@ public class CurriculumDocument {
     private String title;
     private Integer targetGrade;
     private String targetMajor;
+    private String targetCohort;
 }

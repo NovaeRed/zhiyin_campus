@@ -2,6 +2,7 @@ package cn.redture.campus.pojo.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -14,4 +15,3 @@ public class LoginRequestDTO {
 
     private String password;
 }
-

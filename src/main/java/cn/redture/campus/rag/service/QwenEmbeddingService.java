@@ -1,9 +1,11 @@
 package cn.redture.campus.rag.service;
 
 import cn.redture.campus.config.RagProperties;
+
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,7 +19,8 @@ public class QwenEmbeddingService {
     private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
     private final RagProperties properties;
 
-    public QwenEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider, RagProperties properties) {
+    public QwenEmbeddingService(
+        ObjectProvider<EmbeddingModel> embeddingModelProvider, RagProperties properties) {
         this.embeddingModelProvider = embeddingModelProvider;
         this.properties = properties;
     }
@@ -30,18 +33,18 @@ public class QwenEmbeddingService {
     }
 
     public List<float[]> embedDocuments(List<String> texts) {
-        List<String> validTexts = texts == null ? List.of() : texts.stream()
-                .filter(StringUtils::hasText)
-                .map(String::trim)
-                .toList();
+        List<String> validTexts =
+            texts == null
+                ? List.of()
+                : texts.stream().filter(StringUtils::hasText).map(String::trim).toList();
         if (validTexts.isEmpty()) {
             return new ArrayList<>();
         }
         List<TextSegment> segments = validTexts.stream().map(TextSegment::from).toList();
         return embeddingModel().embedAll(segments).content().stream()
-                .map(Embedding::vector)
-                .map(this::validateDimension)
-                .toList();
+            .map(Embedding::vector)
+            .map(this::validateDimension)
+            .toList();
     }
 
     private EmbeddingModel embeddingModel() {
@@ -51,10 +54,13 @@ public class QwenEmbeddingService {
     private float[] validateDimension(float[] vector) {
         int expected = properties.getQwen().getEmbeddingDimension();
         if (vector == null || vector.length != expected) {
-            throw new IllegalStateException("Embedding dimension mismatch. model="
+            throw new IllegalStateException(
+                "Embedding dimension mismatch. model="
                     + properties.getQwen().getEmbeddingModel()
-                    + ", expected=" + expected
-                    + ", actual=" + (vector == null ? 0 : vector.length));
+                    + ", expected="
+                    + expected
+                    + ", actual="
+                    + (vector == null ? 0 : vector.length));
         }
         return vector;
     }

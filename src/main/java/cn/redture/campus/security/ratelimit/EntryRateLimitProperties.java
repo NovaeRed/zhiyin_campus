@@ -1,6 +1,7 @@
 package cn.redture.campus.security.ratelimit;
 
 import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -92,7 +93,9 @@ public class EntryRateLimitProperties {
         }
 
         public int effectiveRefillTokens() {
-            return refillTokens != null && refillTokens > 0 ? refillTokens : Math.max(maxRequests, 1);
+            return refillTokens != null && refillTokens > 0
+                ? refillTokens
+                : Math.max(maxRequests, 1);
         }
 
         public long effectiveRefillPeriodMs() {

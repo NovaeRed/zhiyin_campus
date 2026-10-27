@@ -5,10 +5,13 @@ import cn.redture.campus.security.ratelimit.core.RateLimitConsumeResult;
 import cn.redture.campus.security.ratelimit.core.RedisTokenBucketRateLimiter;
 import cn.redture.campus.util.IpAddressUtil;
 import cn.redture.campus.util.JwtUtil;
+
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.AntPathMatcher;
@@ -63,8 +66,12 @@ public class EntryRateLimiterService {
 
             RateLimitConsumeResult consumeResult = consume(rule, identity);
             if (!consumeResult.allowed()) {
-                log.warn("Entry rate limit blocked: rule={}, path={}, identity={}, current={}",
-                        rule.getName(), path, identity, consumeResult.remainingTokens());
+                log.warn(
+                    "Entry rate limit blocked: rule={}, path={}, identity={}, current={}",
+                    rule.getName(),
+                    path,
+                    identity,
+                    consumeResult.remainingTokens());
                 return consumeResult.withRuleName(rule.getName());
             }
         }
@@ -74,7 +81,9 @@ public class EntryRateLimiterService {
 
     private RateLimitConsumeResult consume(EntryRateLimitProperties.Rule rule, String identity) {
         EntryRateLimitProperties.RateLimitAlgorithm algorithm =
-                rule.getAlgorithm() == null ? EntryRateLimitProperties.RateLimitAlgorithm.TOKEN_BUCKET : rule.getAlgorithm();
+            rule.getAlgorithm() == null
+                ? EntryRateLimitProperties.RateLimitAlgorithm.TOKEN_BUCKET
+                : rule.getAlgorithm();
 
         if (algorithm == EntryRateLimitProperties.RateLimitAlgorithm.FIXED_WINDOW) {
             return consumeByFixedWindow(rule, identity);
@@ -82,7 +91,8 @@ public class EntryRateLimiterService {
         return tokenBucketRateLimiter.consume(rule, identity);
     }
 
-    private RateLimitConsumeResult consumeByFixedWindow(EntryRateLimitProperties.Rule rule, String identity) {
+    private RateLimitConsumeResult consumeByFixedWindow(
+        EntryRateLimitProperties.Rule rule, String identity) {
         long bucket = Instant.now().getEpochSecond() / Math.max(rule.getWindowSeconds(), 1);
         String key = KEY_PREFIX + ":" + rule.getName() + ":" + identity + ":" + bucket;
         Long current = stringRedisTemplate.opsForValue().increment(key);
@@ -135,7 +145,8 @@ public class EntryRateLimiterService {
         return active;
     }
 
-    private String resolveIdentity(HttpServletRequest request, EntryRateLimitProperties.LimitKeyStrategy strategy) {
+    private String resolveIdentity(
+        HttpServletRequest request, EntryRateLimitProperties.LimitKeyStrategy strategy) {
         return switch (strategy) {
             case USER_OR_IP -> resolveUserId(request).orElseGet(() -> resolveClientIp(request));
             case IP -> resolveClientIp(request);

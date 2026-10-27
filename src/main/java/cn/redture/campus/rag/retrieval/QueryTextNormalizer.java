@@ -10,8 +10,10 @@ import java.util.regex.Pattern;
 
 public final class QueryTextNormalizer {
 
-    private static final Pattern SEPARATORS = Pattern.compile("[\\s,，。？?；;：:、.!！()（）\\[\\]【】\"'“”‘’]+");
-    private static final Pattern QUESTION_WORDS = Pattern.compile(
+    private static final Pattern SEPARATORS =
+        Pattern.compile("[\\s,，。？?；;：:、.!！()（）\\[\\]【】\"'“”‘’]+");
+    private static final Pattern QUESTION_WORDS =
+        Pattern.compile(
             "(请问|请|帮我|一下|有哪些|有什么|是什么|应该|怎样|怎么|如何|最多|多少|是否|可以|能不能|需要|进行|相关|关于|什么|是几|几|是|吗|呢|的|了|以及)");
 
     private QueryTextNormalizer() {
@@ -34,10 +36,14 @@ public final class QueryTextNormalizer {
     }
 
     public static List<String> phrases(String text) {
-        if (!StringUtils.hasText(text)) return List.of();
+        if (!StringUtils.hasText(text)) {
+            return List.of();
+        }
         String normalized = SEPARATORS.matcher(text.toLowerCase(Locale.ROOT)).replaceAll(" ");
-        return java.util.Arrays.stream(QUESTION_WORDS.matcher(normalized).replaceAll(" ").trim().split("\\s+"))
-                .filter(p -> p.length() >= 2).toList();
+        return java.util.Arrays.stream(
+                QUESTION_WORDS.matcher(normalized).replaceAll(" ").trim().split("\\s+"))
+            .filter(p -> p.length() >= 2)
+            .toList();
     }
 
     private static void addKeywordCandidates(Set<String> keywords, String text) {

@@ -4,6 +4,7 @@ import dev.langchain4j.community.model.dashscope.QwenChatModel;
 import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,12 +18,19 @@ import java.util.List;
 public class QwenModelConfig {
     @Bean
     @Lazy
-    public dev.langchain4j.model.chat.StreamingChatModel qwenStreamingChatModel(RagProperties properties) {
-        var qwen=properties.getQwen();
-        var builder=dev.langchain4j.community.model.dashscope.QwenStreamingChatModel.builder()
-                .apiKey(resolveApiKey(qwen)).modelName(qwen.getChatModel()).temperature(qwen.getTemperature())
-                .topP(qwen.getTopP()).maxTokens(qwen.getMaxTokens());
-        if(StringUtils.hasText(qwen.getBaseUrl()))builder.baseUrl(qwen.getBaseUrl());
+    public dev.langchain4j.model.chat.StreamingChatModel qwenStreamingChatModel(
+        RagProperties properties) {
+        var qwen = properties.getQwen();
+        var builder =
+            dev.langchain4j.community.model.dashscope.QwenStreamingChatModel.builder()
+                .apiKey(resolveApiKey(qwen))
+                .modelName(qwen.getChatModel())
+                .temperature(qwen.getTemperature())
+                .topP(qwen.getTopP())
+                .maxTokens(qwen.getMaxTokens());
+        if (StringUtils.hasText(qwen.getBaseUrl())) {
+            builder.baseUrl(qwen.getBaseUrl());
+        }
         return builder.build();
     }
 
@@ -31,7 +39,8 @@ public class QwenModelConfig {
     public ChatModel qwenChatModel(RagProperties properties) {
         RagProperties.Qwen qwen = properties.getQwen();
         String apiKey = resolveApiKey(qwen);
-        QwenChatModel.QwenChatModelBuilder builder = QwenChatModel.builder()
+        QwenChatModel.QwenChatModelBuilder builder =
+            QwenChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(qwen.getChatModel())
                 .temperature(qwen.getTemperature())
@@ -48,7 +57,8 @@ public class QwenModelConfig {
     public EmbeddingModel qwenEmbeddingModel(RagProperties properties) {
         RagProperties.Qwen qwen = properties.getQwen();
         String apiKey = resolveApiKey(qwen);
-        QwenEmbeddingModel.QwenEmbeddingModelBuilder builder = QwenEmbeddingModel.builder()
+        QwenEmbeddingModel.QwenEmbeddingModelBuilder builder =
+            QwenEmbeddingModel.builder()
                 .apiKey(apiKey)
                 .modelName(qwen.getEmbeddingModel())
                 .dimension(qwen.getEmbeddingDimension());
@@ -62,12 +72,15 @@ public class QwenModelConfig {
         if (StringUtils.hasText(qwen.getApiKey())) {
             return qwen.getApiKey();
         }
-        for (String candidate : List.of("Qwen-Api", "QWEN_API", "QWEN_API_KEY", "DASHSCOPE_API_KEY")) {
+        for (String candidate :
+            List.of("Qwen-Api", "QWEN_API", "QWEN_API_KEY", "DASHSCOPE_API_KEY")) {
             String value = System.getenv(candidate);
             if (StringUtils.hasText(value)) {
                 return value;
             }
         }
-        throw new IllegalStateException("DashScope api key is missing. Please set environment variable Qwen-Api or QWEN_API_KEY.");
+        throw new IllegalStateException(
+            "DashScope api key is missing. Please set environment variable Qwen-Api or"
+                + " QWEN_API_KEY.");
     }
 }
