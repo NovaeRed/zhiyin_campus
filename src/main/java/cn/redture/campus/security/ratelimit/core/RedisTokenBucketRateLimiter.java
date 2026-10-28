@@ -24,6 +24,13 @@ public class RedisTokenBucketRateLimiter implements RateLimiterAlgorithm {
 
     private final RateLimitKeyBuilder rateLimitKeyBuilder;
 
+    /**
+     * 将令牌放大为整数刻度后调用Redis Lua原子补充和扣减，返回是否允许及重试时间。
+     *
+     * @param rule     当前入口的桶容量、补充速率及规则名称
+     * @param identity 用于隔离令牌桶的请求身份，例如客户端IP
+     * @return 放行结果、剩余额度及需要等待的秒数
+     */
     @Override
     public RateLimitConsumeResult consume(EntryRateLimitProperties.Rule rule, String identity) {
         int capacity = Math.max(rule.effectiveCapacity(), 1);
@@ -56,6 +63,14 @@ public class RedisTokenBucketRateLimiter implements RateLimiterAlgorithm {
         return RateLimitConsumeResult.blocked(Math.max(retryAfterSeconds, 1L), remaining);
     }
 
+    /**
+     * 根据从空桶补满所需时间设置过期预算，保留两倍补充周期并保证最小存活时间。
+     *
+     * @param capacityScaled     放大后的桶容量
+     * @param refillTokensScaled 每个补充周期增加的整数令牌量
+     * @param refillPeriodMs     令牌补充周期的毫秒数
+     * @return Redis桶状态的过期时间，单位毫秒
+     */
     private long calculateTtlMs(long capacityScaled, long refillTokensScaled, long refillPeriodMs) {
         long fullRefillMs =
             (long) Math.ceil((double) capacityScaled * refillPeriodMs / refillTokensScaled);

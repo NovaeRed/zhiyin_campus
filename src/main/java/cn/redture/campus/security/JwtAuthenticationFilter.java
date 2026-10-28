@@ -42,6 +42,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Resource
     private cn.redture.campus.service.AccountAccessService accounts;
 
+    /**
+     * 对受保护请求验证访问令牌及存活账号，并将用户身份写入安全上下文；认证异常交由统一异常解析器处理。
+     *
+     * @param request  当前HTTP请求
+     * @param response 当前HTTP响应
+     * @param chain    后续安全过滤器链
+     */
     @Override
     protected void doFilterInternal(
         HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -94,9 +101,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 验证令牌，如果无效则抛出相应的异常
+     * 校验JWT签名和有效期，再按令牌标识检查Redis撤销记录。
      *
-     * @param token 令牌
+     * @param token 去掉Bearer前缀后的访问令牌
      */
     private void validateToken(String token) {
         // 1. 基础验证（签名、过期时间），失败会抛出 ExpiredTokenException 或 InvalidTokenException

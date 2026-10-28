@@ -14,6 +14,14 @@ public final class RankFusion {
     private RankFusion() {
     }
 
+    /**
+     * 以每条查询及召回通道为独立排名列表累计RRF，并保留最高原始分和按路数归一化的融合分。
+     *
+     * @param vectorRoutes  各个向量查询按相关性排序的候选列表
+     * @param keywordRoutes 各个关键词查询按相关性排序的候选列表
+     * @param k             正数RRF平滑参数，每路贡献为一除以参数与排名之和
+     * @return 按原始融合分降序、同分按子块标识稳定排序的候选
+     */
     public static List<RetrievedChunk> fuse(
         List<List<RetrievedChunk>> vectorRoutes,
         List<List<RetrievedChunk>> keywordRoutes,
@@ -30,6 +38,7 @@ public final class RankFusion {
         }
         int routeCount = vectorRoutes.size() + keywordRoutes.size();
         for (var chunk : merged.values()) {
+            // 原始RRF分用于追踪；另存按召回路数缩放的分数，供后续规则重排使用。
             chunk.setNormalizedFusedScore(chunk.getFusedScore() * (k + 1) / routeCount);
         }
         return merged.values().stream()
@@ -40,6 +49,14 @@ public final class RankFusion {
             .toList();
     }
 
+    /**
+     * 将一路候选加入融合映射，同一列表中重复子块仅计一次，并维护对应通道的最高原始分。
+     *
+     * @param merged 按子块标识累计融合结果的可变映射
+     * @param route  当前召回路的有序候选
+     * @param k      RRF平滑参数
+     * @param vector 当前列表是否来自向量通道
+     */
     private static void add(
         Map<Long, RetrievedChunk> merged, List<RetrievedChunk> route, int k, boolean vector) {
         Set<Long> seen = new HashSet<>();

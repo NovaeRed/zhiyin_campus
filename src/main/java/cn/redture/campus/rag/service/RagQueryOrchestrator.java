@@ -59,6 +59,14 @@ public class RagQueryOrchestrator {
         this.reranker = reranker;
     }
 
+    /**
+     * 在已声明的可靠请求中执行一次语义规划、课程专用查询或混合检索，并保存回答轨迹。请求幂等与最终发布由外层可靠请求服务负责。
+     *
+     * @param request     包含原问题、已确认范围、有界历史及可选流式回调的请求
+     * @param sessionId   已校验归属的会话标识
+     * @param queryRecord 外层事务创建的查询记录及追踪标识
+     * @return 回答正文、检索表达、会话标识与允许发布的来源
+     */
     public RagAnswerResponseVO askPrepared(
         RagAskRequestDTO request, Long sessionId, KnowledgeRepository.QueryRecord queryRecord) {
         if (!StringUtils.hasText(request.getQuestion())) {
@@ -72,6 +80,7 @@ public class RagQueryOrchestrator {
         repository.recordIntent(queryRecord.queryId(), intent.domain(), intent.task().name(), intent.fallback());
         checkCancelled();
         repository.queryPhase(queryRecord.queryId(), intent.fallback() ? "understanding_fallback" : "routing");
+        // 通用检索不套用课程白名单；只有语义计划确认课程任务后才收窄实际文档集合。
         List<Long> allowedDocuments = null;
         if (intent.academic()) {
             if (intent.task() == QueryIntent.Task.COURSE_LIST
@@ -87,7 +96,7 @@ public class RagQueryOrchestrator {
             }
         }
 
-        // 同一次语义规划已经提供独立检索问题，不再调用第二次改写模型。
+        // 使用语义计划中的独立问题、HyDE文本和扩展表达构造召回计划。
         RetrievalQueryPlan plan = new RetrievalQueryPlan(request.getQuestion(), intent.searchQuery(), intent.hypotheticalText(), null, intent.alternatives());
         String rewrittenQuery = plan.rerankQuery();
         repository.rewriteQuery(queryRecord.queryId(), rewrittenQuery);
@@ -122,6 +131,7 @@ public class RagQueryOrchestrator {
         }
         List<RetrievedChunk> fused =
             RankFusion.fuse(vectorRoutes, keywordRoutes, properties.getRetrieval().getRrfK());
+        // 先按证据门槛筛选重排候选，再截取最终来源数量。
         List<RetrievedChunk> reranked =
             reranker.rerank(intent.searchQuery(), fused, Math.max(1, fused.size())).stream()
                 .filter(
@@ -183,6 +193,17 @@ public class RagQueryOrchestrator {
         String answer, String model, String template, boolean publishSources) {
     }
 
+    /**
+     * 记录并返回课程清单、版本比较或范围拒答等直接执行结果。
+     *
+     * @param request   保留用户原始问题的请求
+     * @param sessionId 当前会话标识
+     * @param query     当前查询记录
+     * @param answer    专用执行器产生的回答或澄清文本
+     * @param sources   支撑回答的真实来源，拒答或澄清时可为空
+     * @param template  用于区分直接执行分支的追踪模板标识
+     * @return 已写入轨迹的直接回答及来源
+     */
     private RagAnswerResponseVO directAnswer(
         RagAskRequestDTO request,
         Long sessionId,
@@ -209,6 +230,15 @@ public class RagQueryOrchestrator {
             .build();
     }
 
+    /**
+     * 优先从课程实体与课程行生成精确事实，否则依据候选资料调用模型；引用不合法时最多修复一次，仍失败则禁止发布有效来源。
+     *
+     * @param intent  本次唯一语义计划，包含独立问题和课程实体
+     * @param history 用于消解指代的有界对话历史
+     * @param tokens  草稿输出回调；传入 {@code null} 使用非流式模型
+     * @param chunks  已通过证据门槛、按最终顺序编号的来源
+     * @return 回答、实际执行模型、模板标识及来源发布标记
+     */
     private GenerationResult generateAnswer(
         QueryIntent intent,
         String history,
@@ -258,6 +288,7 @@ public class RagQueryOrchestrator {
         String template = PROMPT_TEMPLATE;
         if (!CitationPolicy.valid(answer, chunks.size())) {
             if (tokens != null) {
+                // 通过空片段触发draft_reset，清除上一轮待修复草稿。
                 tokens.accept(null);
             }
             answer =
@@ -288,6 +319,13 @@ public class RagQueryOrchestrator {
         return chatModelProvider.getObject();
     }
 
+    /**
+     * 根据是否提供回调选择普通或流式生成；流式结果通过完成信号交回编排线程，并受等待截止与中断约束。
+     *
+     * @param prompt 由真实来源和当前问题构造的提示文本
+     * @param tokens 接收草稿片段的回调，为 {@code null} 时使用普通生成
+     * @return 模型最终生成的完整文本
+     */
     private String chat(String prompt, java.util.function.Consumer<String> tokens) {
         checkCancelled();
         if (tokens == null) {
@@ -330,6 +368,9 @@ public class RagQueryOrchestrator {
         }
     }
 
+    /**
+     * 在进入可能产生外部调用或持久化的阶段前检查线程中断，已中断时终止当前编排。
+     */
     private void checkCancelled() {
         if (Thread.currentThread().isInterrupted()) {
             throw new java.util.concurrent.CancellationException("Request interrupted");

@@ -12,7 +12,7 @@ public class MybatisConfig {
 
     @Bean
     public ConfigurationCustomizer preserveNullMapColumns() {
-        // 与原 JDBC 返回契约一致：Map 保留值为 null 的列，避免前端字段无故消失。
+        // 保留Map中值为null的列，使查询结果包含完整字段。
         return configuration -> {
             configuration.setCallSettersOnNulls(true);
             // 全部列为空的真实结果行仍应保留，例如尚未绑定查询的过期请求。

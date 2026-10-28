@@ -33,6 +33,12 @@ public interface KnowledgeMapper {
             + " WHERE id=#{id} AND workflow_state<>'cancelled'")
     void failQuery(@Param("id") Long id, @Param("code") String code);
 
+    /**
+     * 读取指定有效文档的全部课程表子块，并关联父上下文。
+     *
+     * @param docId 已由专用执行器确定的培养方案文档标识
+     * @return 按切片标识排列的完整课程记录来源
+     */
     @Select(
         """
             SELECT c.id AS "chunkId", c.doc_id AS "docId", c.parent_id AS "parentId", d.title,
@@ -47,6 +53,11 @@ public interface KnowledgeMapper {
             """)
     List<RetrievedChunk> curriculumCourseChunks(@Param("docId") Long docId);
 
+    /**
+     * 根据有效状态、课程记录和类型标记读取培养方案目录。
+     *
+     * @return 聚合了文档标识、标题、专业及入学年份的目录
+     */
     @Select(
         """
             SELECT d.id AS "docId", d.title, MIN(c.target_grade) AS "targetGrade", MIN(c.target_major) AS "targetMajor",
@@ -120,6 +131,18 @@ public interface KnowledgeMapper {
             """)
     int completeQuery(@Param("queryId") Long queryId, @Param("confidence") double confidence);
 
+    /**
+     * 按余弦距离召回子块；SQL在LIMIT前表达文档状态和范围条件，同时关联父正文。
+     *
+     * @param embeddingVector 符合pgvector输入格式的向量文本
+     * @param targetMajor     可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade     可选入学年份条件
+     * @param targetCohort    可选毕业届别条件
+     * @param limit           当前召回路的候选数量上限
+     * @param docIds          文档白名单；{@code null} 表示不限制，空列表表示没有可检索文档
+     * @param excludedDocIds  额外排除的文档标识列表，空列表表示不额外排除
+     * @return 当前召回路的候选，包含子块标识、父标识及补全正文
+     */
     @Select(
         """
             <script>
@@ -167,6 +190,19 @@ public interface KnowledgeMapper {
         @Param("docIds") List<Long> docIds,
         @Param("excludedDocIds") List<Long> excludedDocIds);
 
+    /**
+     * 按全文词面及中文关键词召回，并按父上下文择优；SQL在LIMIT前表达文档状态和范围条件，同时关联父正文。
+     *
+     * @param query          用于词面召回的检索表达
+     * @param keywords       从查询表达提取的关键词集合
+     * @param targetMajor    可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade    可选入学年份条件
+     * @param targetCohort   可选毕业届别条件
+     * @param limit          当前召回路的候选数量上限
+     * @param docIds         文档白名单；{@code null} 表示不限制，空列表表示没有可检索文档
+     * @param excludedDocIds 额外排除的文档标识列表，空列表表示不额外排除
+     * @return 当前召回路的候选，包含子块标识、父标识及补全正文
+     */
     @Select(
         """
             <script>

@@ -40,6 +40,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
         this.json = json;
     }
 
+    /**
+     * 校验文档权限及真实路径的存储目录归属，并清理响应文件名后返回原文。
+     *
+     * @param id       待访问原文的文档标识
+     * @param download 是否以附件下载方式响应
+     * @return 包含可读原文资源及媒体类型的HTTP响应
+     */
     @Override
     public ResponseEntity<Resource> original(
         long id, boolean download) {
@@ -55,6 +62,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
             if (!file.startsWith(root)) {
                 throw unavailable();
             }
+            // 规范路径仍可能包含符号链接；解析真实路径后再检查一次目录归属。
             file = file.toRealPath();
             if (!file.startsWith(root) || !Files.isRegularFile(file) || !Files.isReadable(file)) {
                 throw unavailable();

@@ -82,6 +82,14 @@ public class IngestionJobService {
                 .resolve("jobs");
     }
 
+    /**
+     * 校验管理权限与文件约束，暂存上传文件并持久化排队任务；重建任务入队前锁定旧文档版本。
+     *
+     * @param file    需要解析和入库的原始上传文件
+     * @param request 标题、版本、切片策略及范围等入库参数
+     * @param rebuild 旧文档标识，为 {@code null} 时表示普通新增
+     * @return 新任务标识、排队状态和初始进度
+     */
     public Map<String, Object> submit(
         MultipartFile file, DocumentUploadRequestDTO request, Long rebuild) {
         portal.requireManager();
@@ -140,6 +148,12 @@ public class IngestionJobService {
         return Map.of("jobId", id, "state", "queued", "progress", 0);
     }
 
+    /**
+     * 验证当前管理用户对任务的可见性，读取持久状态并解析已完成结果。
+     *
+     * @param id 异步入库任务标识
+     * @return 包含阶段、进度、执行次数和可选结果的任务信息
+     */
     public Map<String, Object> status(UUID id) {
         var user = portal.currentUser();
         portal.requireManager();
@@ -155,6 +169,12 @@ public class IngestionJobService {
         return result;
     }
 
+    /**
+     * 在明确确认模型费用后，将允许重试的失败任务重新排队；不接受其他状态或超过执行次数上限的任务。
+     *
+     * @param id           需要重新排队的失败任务标识
+     * @param acknowledged 调用方是否明确确认再次Embedding可能产生费用
+     */
     @org.springframework.transaction.annotation.Transactional
     public void retry(UUID id, boolean acknowledged) {
         status(id);
@@ -170,6 +190,11 @@ public class IngestionJobService {
         audit.record("INGESTION_RETRY", "ingestion_job", id, Map.of("modelCostAcknowledged", true));
     }
 
+    /**
+     * 更新可访问任务的取消状态并尽力中断本实例工作线程，保留已产生的外部调用及审计事实。
+     *
+     * @param id 需要取消的异步入库任务标识
+     */
     @org.springframework.transaction.annotation.Transactional
     public void cancel(UUID id) {
         status(id);
@@ -181,6 +206,9 @@ public class IngestionJobService {
         audit.record("INGESTION_CANCEL", "ingestion_job", id, Map.of());
     }
 
+    /**
+     * 占用本实例执行槽，在短事务中跳过被锁行并领取排队任务，再交由工作线程执行；所有退出路径归还执行槽。
+     */
     @Scheduled(fixedDelay = 1000)
     public void dispatch() {
         if (!slots.tryAcquire()) {
@@ -217,6 +245,11 @@ public class IngestionJobService {
             });
     }
 
+    /**
+     * 以任务所属用户身份执行解析和Embedding准备，再在发布事务中复核任务与权限，原子发布新版本、停用旧版本并完成任务。
+     *
+     * @param job 已领取的任务行，包含用户、暂存路径、入库参数和可选重建目标
+     */
     private void execute(Map<String, Object> job) {
         UUID id = (UUID) job.get("id");
         long user = ((Number) job.get("user_id")).longValue();
@@ -251,9 +284,11 @@ public class IngestionJobService {
                     },
                     false);
             var completed = result;
+            // 解析、向量调用和准备写入已经发生；这里只将版本切换与任务完成放在同一事务。
             tx.executeWithoutResult(
                 status -> {
                     var current = ingestionJobMapper.lockState(id);
+                    // 持有任务行锁并确认执行态后，进入新版本发布流程。
                     if (!"processing".equals(current)) {
                         throw new CancellationException();
                     }
@@ -288,6 +323,9 @@ public class IngestionJobService {
         }
     }
 
+    /**
+     * 为本实例正在执行的入库任务续租，并将超出租约的任务收敛为失败，不重新调用Embedding。
+     */
     @Scheduled(fixedDelay = 10000)
     public void renew() {
         for (var id : active.keySet()) {

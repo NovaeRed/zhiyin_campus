@@ -26,6 +26,13 @@ public class RagStreamingController {
         this.rag = rag;
     }
 
+    /**
+     * 校验流式请求并占用连接槽，在虚拟线程中恢复认证上下文，推送草稿、草稿重置及校验后答案；关闭连接时尽力取消执行。
+     *
+     * @param request 包含问题、会话与范围的流式问答请求
+     * @param key     可选幂等请求头，须与请求体中的requestId一致
+     * @return 用于持续发送事件的SSE连接
+     */
     @PostMapping(value = "/rag/ask/stream", produces = "text/event-stream")
     public SseEmitter stream(
         @RequestBody RagAskRequestDTO request,

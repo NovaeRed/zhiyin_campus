@@ -17,6 +17,14 @@ public class SimpleContentReranker implements Reranker {
     private static final Pattern COURSE_ROW =
         Pattern.compile("(?m)^\\s*\\d{6}\\s+(.+?)\\s+\\d+(?:\\.\\d+)?\\s+20\\d{2}-");
 
+    /**
+     * 计算规则重排与独立证据分，按父上下文去重后取前若干项；评分会写回候选对象。
+     *
+     * @param query  语义计划提供的独立检索问题
+     * @param chunks 已融合的候选切片
+     * @param topK   父上下文去重后保留的最大数量
+     * @return 按重排分降序排列的候选列表
+     */
     @Override
     public List<RetrievedChunk> rerank(String query, List<RetrievedChunk> chunks, int topK) {
         if (topK < 1) {
@@ -88,11 +96,19 @@ public class SimpleContentReranker implements Reranker {
                     query, canonical, weights, chunk.getContent())));
     }
 
+    /**
+     * 按查询字符位置聚合词面命中的最大权重，计算加权覆盖分。
+     *
+     * @param weights   根据候选上下文词频构造的查询词权重
+     * @param canonical 用于确定字符位置的规范查询表达
+     * @param value     待计算覆盖的正文或标题
+     * @return 零至一之间的加权词面覆盖分
+     */
     private double coverage(Map<String, Double> weights, String canonical, String value) {
         String content = text(value);
         double[] possible = new double[canonical.length()];
         double[] covered = new double[canonical.length()];
-        // 每个查询字符只计分一次，避免重叠的多粒度子串重复贡献分数。
+        // 每个查询字符仅取匹配词中的最大权重。
         for (var term : weights.entrySet()) {
             boolean hit = content.contains(term.getKey());
             for (int at = canonical.indexOf(term.getKey());
@@ -110,6 +126,15 @@ public class SimpleContentReranker implements Reranker {
         return total == 0 ? 0 : Arrays.stream(covered).sum() / total;
     }
 
+    /**
+     * 计算学分查询中实验课、课程设计变体的评分惩罚。
+     *
+     * @param query     当前检索问题
+     * @param canonical 规范查询表达
+     * @param weights   用于匹配课程名称的查询词权重
+     * @param content   候选父上下文或切片正文
+     * @return 课程变体惩罚值，未触发规则时为零
+     */
     private double courseVariantPenalty(
         String query, String canonical, Map<String, Double> weights, String content) {
         if (!query.contains("学分") || query.contains("实验") || query.contains("课程设计")) {

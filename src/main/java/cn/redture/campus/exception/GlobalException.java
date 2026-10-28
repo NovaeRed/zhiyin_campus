@@ -73,7 +73,7 @@ public class GlobalException {
     })
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public RestResult<Void> handleMalformedRequest(Exception e) {
-        // 不回显解析器的原始错误，避免泄露提交的密码或文档正文。
+        // 解析失败时使用统一的请求格式错误消息。
         log.warn("请求格式无效: {}", e.getClass().getSimpleName());
         return RestResult.badRequest("请求格式或参数不合法，请检查请求体、参数类型及必填文件");
     }

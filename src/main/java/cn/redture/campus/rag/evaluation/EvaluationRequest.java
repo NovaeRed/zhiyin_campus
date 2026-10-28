@@ -6,7 +6,7 @@ import jakarta.validation.constraints.*;
 import java.util.List;
 
 /**
- * 标准答案必须依据原始文档标注，不能根据检索得分反推。
+ * 按原始文档标注标准答案。
  */
 public record EvaluationRequest(
     @NotBlank @Size(max = 100) String datasetVersion,
@@ -24,7 +24,7 @@ public record EvaluationRequest(
     }
 
     /**
-     * 所有已提供的筛选条件按“且”组合；引用必须是原文证据，不能只填关键词。
+     * 所有已提供的筛选条件按“且”组合；引用字段填写原文证据。
      */
     public record Evidence(
         @NotBlank @Size(max = 100) String id,

@@ -22,6 +22,12 @@ public class ParentChildChunker implements DocumentChunker {
         return "parent_child";
     }
 
+    /**
+     * 先生成保留结构的子块，再按长度和课程表页码、分组边界聚合父正文，为每个子块设置父索引。
+     *
+     * @param text 整份文档提取出的正文
+     * @return 按父块及其子块顺序排列的切片单元
+     */
     @Override
     public List<ChunkUnit> split(String text) {
         List<ChunkUnit> result = new ArrayList<>();
@@ -61,7 +67,10 @@ public class ParentChildChunker implements DocumentChunker {
     }
 
     /**
-     * 只合并同页、同章节的内容；表格记录即使超过目标长度也保持完整。
+     * 按照目标父长度及课程表的页码和分组边界聚合子块索引；单条超长课程记录仍完整保留。
+     *
+     * @param children 已按正文顺序生成的子块内容
+     * @return 每个父组对应的子块索引列表，索引指向输入列表
      */
     public List<List<Integer>> groupChildren(List<String> children) {
         List<List<Integer>> groups = new ArrayList<>();

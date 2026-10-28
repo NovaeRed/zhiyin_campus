@@ -72,6 +72,12 @@ public class PortalService {
             size);
     }
 
+    /**
+     * 校验当前存活账号并按实时角色读取可见文档详情，不允许通过文档标识绕过可见性限制。
+     *
+     * @param id 需要读取的文档标识
+     * @return 当前用户可见的文档详情
+     */
     public Document document(Long id) {
         requireManager();
         Document doc = portal.document(id);
@@ -123,6 +129,11 @@ public class PortalService {
             size);
     }
 
+    /**
+     * 在文档行锁内拒绝入库或重建中的删除，将文档逻辑删除并停用切片，同时保留原始文件和审计记录。
+     *
+     * @param id 待逻辑删除的文档标识
+     */
     @Transactional
     public void deleteDocument(Long id) {
         requireManager();

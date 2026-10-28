@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * 从结构化课程行提取事实，不使用模型编造的数值或按问题硬编码答案。
+ * 提取结构化课程行，并按查询计划生成课程数值回答。
  */
 public final class CourseEvidence {
     private static final Pattern ROW =
@@ -31,11 +31,23 @@ public final class CourseEvidence {
         int sourceIndex,
         Integer enrollmentYear,
         String nature) {
+        /**
+         * 复制课程事实并替换引用编号，用于父上下文去重后的最终来源映射。
+         *
+         * @param index 最终来源列表中从一开始的编号
+         * @return 仅引用编号发生变化的新课程事实
+         */
         public Fact withSourceIndex(int index) {
             return new Fact(code, name, credits, startYear, endYear, semester, index, enrollmentYear, nature);
         }
     }
 
+    /**
+     * 从真实课程行提取名称、学分与修读时间，按来源列表位置绑定引用，并仅读取该记录区块中的课程性质。
+     *
+     * @param chunks 正文及入学年已就绪的真实来源列表
+     * @return 课程事实列表，引用编号对应输入来源位置
+     */
     public static List<Fact> extract(List<RetrievedChunk> chunks) {
         List<Fact> facts = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
@@ -57,7 +69,7 @@ public final class CourseEvidence {
                     if (label.find()) {
                         nature = label.group(1).trim();
                     }
-                    // 实践课也可能属于选修分组，不能仅凭“实践”判定为必修。
+                    // 课程性质为“实践”时，继续读取所在分组的必修或选修标记。
                     if ("实践".equals(nature)) {
                         var group = GROUP.matcher(block);
                         if (group.find()) {
@@ -87,7 +99,11 @@ public final class CourseEvidence {
     }
 
     /**
-     * 只消费语义计划的课程实体；缺少任一实体证据时交回常规证据生成，避免输出半份答案。
+     * 消费语义计划中的课程名称或课程号，精确匹配实际课程行。
+     *
+     * @param plan 本次唯一语义计划，含课程实体和可选相对学年
+     * @param chunks 完成范围过滤与重排的真实来源
+     * @return 可确定性回答的课程事实；任务不适用或证据不全时为空
      */
     public static Optional<String> answer(QueryIntent plan, List<RetrievedChunk> chunks) {
         if (plan.task() != QueryIntent.Task.COURSE_FACT || plan.courseNames().isEmpty()) {

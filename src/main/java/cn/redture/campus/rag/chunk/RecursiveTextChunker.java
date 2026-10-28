@@ -38,6 +38,13 @@ public class RecursiveTextChunker implements DocumentChunker {
         return chunks;
     }
 
+    /**
+     * 优先保留完整表格记录，普通正文按段落合并，超长段落再按句子拆分。
+     *
+     * @param text      已规范换行的正文或片段
+     * @param maxLength 普通文本的目标字符长度，原子表格记录可超过此值
+     * @return 保持原始顺序的结构片段
+     */
     static List<String> splitByStructure(String text, int maxLength) {
         if (TableRowBlocks.contains(text)) {
             List<String> rows = new ArrayList<>();
@@ -76,6 +83,14 @@ public class RecursiveTextChunker implements DocumentChunker {
         return result;
     }
 
+    /**
+     * 对普通文本按字符窗口切分并保留重叠；表格记录整块通过，不截断课程字段。
+     *
+     * @param text      待按长度切分的结构片段
+     * @param maxLength 普通窗口的最大目标字符数
+     * @param overlap   相邻普通窗口期望重叠的字符数
+     * @return 保留原子表格记录的有序文本窗口
+     */
     static List<String> splitWithOverlap(String text, int maxLength, int overlap) {
         if (TableRowBlocks.contains(text)) {
             List<String> rows = new ArrayList<>();
@@ -106,10 +121,22 @@ public class RecursiveTextChunker implements DocumentChunker {
         return result;
     }
 
+    /**
+     * 按正文字符长度估算存储用的令牌数量。
+     *
+     * @param text 需要估算长度的切片正文
+     * @return 至少为一的估算令牌数
+     */
     static int estimateTokens(String text) {
         return Math.max(1, (int) Math.ceil(text.length() / 1.8));
     }
 
+    /**
+     * 统一正文换行并移除纯页码标记，保留课程行内部的页行元数据。
+     *
+     * @param text 提取器输出的原始正文，可为空
+     * @return 可继续结构切分的规范化正文
+     */
     static String normalize(String text) {
         return text == null
             ? ""

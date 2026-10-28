@@ -47,6 +47,19 @@ public class KnowledgeRepository {
         return record.getId();
     }
 
+    /**
+     * 写入父块或子块；父块可不带向量，子块的父标识由调用方按已持久化父索引映射提供。
+     *
+     * @param docId       所属文档标识
+     * @param parentId    已持久化父块标识，递归子块或父块本身可为空
+     * @param level       切片层级parent或child
+     * @param content     保留结构的正文
+     * @param embedding   子块向量，父块传入 {@code null}
+     * @param metadata    切片来源、范围与校验信息
+     * @param targetMajor 可选适用专业
+     * @param targetGrade 可选入学年份
+     * @return 新切片的数据库标识
+     */
     public Long insertChunk(
         Long docId,
         Long parentId,
@@ -74,6 +87,13 @@ public class KnowledgeRepository {
         knowledgeMapper.updateChunksStatus(docId, status);
     }
 
+    /**
+     * 创建新会话，或在校验现有会话归属及未删除状态后更新其访问时间。
+     *
+     * @param userId    当前用户标识
+     * @param sessionId 需要继续的会话标识，为 {@code null} 时创建新会话
+     * @return 可供当前用户执行问答的会话标识
+     */
     public Long ensureSession(Long userId, Long sessionId) {
         if (sessionId != null) {
             if (knowledgeMapper.touchOwnedSession(sessionId, userId) != 1) {
@@ -118,6 +138,16 @@ public class KnowledgeRepository {
         knowledgeMapper.recordIntent(id, category.substring(0, Math.min(50, category.length())));
     }
 
+    /**
+     * 按结构化范围执行向量召回，并由SQL关联命中子块的父正文。
+     *
+     * @param embedding    维度已验证的查询向量
+     * @param targetMajor  可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade  可选入学年份条件
+     * @param targetCohort 可选毕业届别条件
+     * @param limit        当前召回路的候选数量上限
+     * @return 保留命中子块标识及父上下文的有序候选
+     */
     public List<RetrievedChunk> searchByVector(
         float[] embedding,
         String targetMajor,
@@ -127,6 +157,17 @@ public class KnowledgeRepository {
         return searchByVector(embedding, targetMajor, targetGrade, targetCohort, limit, null);
     }
 
+    /**
+     * 按结构化范围执行向量召回，并由SQL关联命中子块的父正文。
+     *
+     * @param embedding    维度已验证的查询向量
+     * @param targetMajor  可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade  可选入学年份条件
+     * @param targetCohort 可选毕业届别条件
+     * @param limit        当前召回路的候选数量上限
+     * @param docIds       文档白名单；{@code null} 表示不限制，空列表表示没有可检索文档
+     * @return 保留命中子块标识及父上下文的有序候选
+     */
     public List<RetrievedChunk> searchByVector(
         float[] embedding,
         String targetMajor,
@@ -144,19 +185,51 @@ public class KnowledgeRepository {
             List.of());
     }
 
+    /**
+     * 根据有效状态、课程记录和类型标记读取培养方案目录。
+     *
+     * @return 聚合了文档标识、标题、专业及入学年份的目录
+     */
     public List<CurriculumDocument> activeCurricula() {
         return knowledgeMapper.activeCurricula();
     }
 
+    /**
+     * 读取指定有效文档的全部课程表子块，并关联父上下文。
+     *
+     * @param docId 已由专用执行器确定的培养方案文档标识
+     * @return 按切片标识排列的完整课程记录来源
+     */
     public List<RetrievedChunk> curriculumCourseChunks(Long docId) {
         return knowledgeMapper.curriculumCourseChunks(docId);
     }
 
+    /**
+     * 按结构化范围执行关键词召回，并由SQL关联命中子块的父正文。
+     *
+     * @param query        用于词面召回的检索表达
+     * @param targetMajor  可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade  可选入学年份条件
+     * @param targetCohort 可选毕业届别条件
+     * @param limit        当前召回路的候选数量上限
+     * @return 保留命中子块标识及父上下文的有序候选
+     */
     public List<RetrievedChunk> searchByKeyword(
         String query, String targetMajor, Integer targetGrade, String targetCohort, int limit) {
         return searchByKeyword(query, targetMajor, targetGrade, targetCohort, limit, null);
     }
 
+    /**
+     * 按结构化范围执行关键词召回，并由SQL关联命中子块的父正文。
+     *
+     * @param query        用于词面召回的检索表达
+     * @param targetMajor  可选专业条件，为 {@code null} 时不按该列限制
+     * @param targetGrade  可选入学年份条件
+     * @param targetCohort 可选毕业届别条件
+     * @param limit        当前召回路的候选数量上限
+     * @param docIds       文档白名单；{@code null} 表示不限制，空列表表示没有可检索文档
+     * @return 保留命中子块标识及父上下文的有序候选
+     */
     public List<RetrievedChunk> searchByKeyword(
         String query,
         String targetMajor,
@@ -164,7 +237,6 @@ public class KnowledgeRepository {
         String targetCohort,
         int limit,
         List<Long> docIds) {
-        // Repository 只执行调用方已确定的条件，不再重新解释专业、年份或问题领域。
         return knowledgeMapper.searchByKeyword(
             query,
             QueryTextNormalizer.keywords(query),
@@ -176,6 +248,17 @@ public class KnowledgeRepository {
             List.of());
     }
 
+    /**
+     * 保存融合候选、最终选中来源与本次筛选参数，供后续只读评测和问题追踪。
+     *
+     * @param queryId      当前查询标识
+     * @param initial      已融合的初始候选列表
+     * @param reranked     通过筛选并最终采用的来源列表
+     * @param topK         本次请求的最终候选上限
+     * @param bm25Weight   检索轨迹中的关键词权重
+     * @param vectorWeight 追踪记录中的向量权重字段
+     * @param threshold    本次使用的重排阈值
+     */
     public void insertRetrievalTrace(
         Long queryId,
         List<RetrievedChunk> initial,
@@ -200,6 +283,14 @@ public class KnowledgeRepository {
             threshold);
     }
 
+    /**
+     * 按查询保存实际执行模型、模板和文本，包括确定性结果或未发布的生成记录。
+     *
+     * @param queryId        当前查询标识
+     * @param model          实际模型名称或结构化执行分支标识
+     * @param promptTemplate 生成或直接执行模板版本
+     * @param answer         需要保留的最终文本
+     */
     public void insertGenerationTrace(
         Long queryId, String model, String promptTemplate, String answer) {
         knowledgeMapper.upsertGenerationTrace(queryId, model, promptTemplate, answer);

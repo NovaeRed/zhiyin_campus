@@ -15,6 +15,12 @@ public class AccountAccessService {
         this.users = users;
     }
 
+    /**
+     * 实时读取账号并校验其存在、未删除且已启用。
+     *
+     * @param id 待检查的用户标识
+     * @return 当前仍可用的用户实体及实时角色信息
+     */
     public User requireActive(Long id) {
         User user = id == null ? null : users.selectById(id);
         if (user == null || user.getDeletedAt() != null) {

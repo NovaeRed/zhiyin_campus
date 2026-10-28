@@ -49,6 +49,12 @@ public class AuthServiceImpl implements AuthService {
     @Resource
     private cn.redture.campus.service.AccountAccessService accounts;
 
+    /**
+     * 校验注册字段和学号唯一性，使用BCrypt保存密码并为新用户签发访问与刷新令牌。
+     *
+     * @param request 包含学号、用户名和明文密码的注册请求
+     * @return 新用户的访问令牌、刷新令牌及有效期信息
+     */
     @Override
     public TokenResponseDTO register(RegisterRequestDTO request) {
         if (request.getStudentNo() == null
@@ -91,13 +97,19 @@ public class AuthServiceImpl implements AuthService {
         try {
             userMapper.insert(user);
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
-            // 唯一约束同时防止并发注册冲突以及复用软删除账号的学号。
+            // 由唯一约束校验学号占用，包括并发注册和已软删除账号。
             throw new BaseException(HttpStatus.CONFLICT, "学号已存在", "STUDENT_NO_EXISTS");
         }
 
         return generateAccessAndRefreshToken(user);
     }
 
+    /**
+     * 查询账号并校验当前状态及BCrypt密码，验证通过后签发并保存新的令牌对。
+     *
+     * @param request 包含学号和明文密码的登录请求
+     * @return 有效访问令牌、刷新令牌及有效期信息
+     */
     @Override
     public TokenResponseDTO login(LoginRequestDTO request) {
         if (request.getStudentNo() == null
@@ -129,6 +141,11 @@ public class AuthServiceImpl implements AuthService {
         return generateAccessAndRefreshToken(user);
     }
 
+    /**
+     * 解析认证头中的访问令牌，添加撤销记录并移除对应用户的刷新令牌。
+     *
+     * @param authorizationHeader 包含Bearer访问令牌的认证头
+     */
     @Override
     public void logout(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
@@ -152,6 +169,13 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    /**
+     * 校验两种令牌属于同一存活账号，并与Redis中的当前刷新令牌比较；撤销旧访问令牌后签发新令牌对。
+     *
+     * @param expiredAccessToken 用于确认用户身份的旧访问令牌，可已过期
+     * @param refreshToken       需要验证且必须与Redis当前值一致的刷新令牌
+     * @return 轮换后的访问令牌与刷新令牌
+     */
     @Override
     public TokenResponseDTO refreshToken(String expiredAccessToken, String refreshToken) {
         if (expiredAccessToken == null || refreshToken == null) {
@@ -194,7 +218,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RevokedRefreshTokenException("会话已失效，请重新登录");
         }
 
-        // 5. 将旧的、已过期的 access token 加入黑名单，防止重放
+        // 5. 将旧访问令牌加入黑名单
         tokenManagementUtil.addAccessTokenToBlacklist(expiredAccessToken);
 
         // 6. 验证通过，生成一对全新的 token

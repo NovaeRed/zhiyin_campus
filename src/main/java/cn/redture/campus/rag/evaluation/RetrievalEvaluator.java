@@ -21,10 +21,17 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * 根据证据确定性地计算检索得分，不调用模型、写数据库或访问网络。
+ * 根据标准证据与检索快照计算评测指标。
  */
 @Component
 public class RetrievalEvaluator {
+    /**
+     * 依据人工标准和已保存候选快照计算逐题及汇总证据指标。
+     *
+     * @param request   包含标准证据、评估阶段和K值的请求
+     * @param snapshots 按查询标识索引的已保存检索快照
+     * @return 包含逐题结果、汇总指标与适用边界警告的评测报告
+     */
     public EvaluationReport evaluate(
         EvaluationRequest request, Map<Long, RetrievalSnapshot> snapshots) {
         validate(request);
@@ -75,6 +82,16 @@ public class RetrievalEvaluator {
             summaries);
     }
 
+    /**
+     * 对指定阶段候选按父上下文去重并匹配标准证据，计算固定K分母的精度以及召回、排名指标。
+     *
+     * @param sample   当前题目的标准证据与预期拒答要求
+     * @param snapshot 当前题目已保存的检索快照
+     * @param stage    需要评估的候选阶段
+     * @param source   该阶段实际记录的候选列表
+     * @param k        本题的截断数量，也是Precision分母
+     * @return 当前阶段的逐题指标、匹配明细和质量结论
+     */
     private CaseResult score(
         Sample sample,
         RetrievalSnapshot snapshot,
@@ -92,7 +109,7 @@ public class RetrievalEvaluator {
         double rr = 0, dcg = 0;
         for (int i = 0; i < top.size(); i++) {
             RetrievedChunk chunk = top.get(i);
-            // 即使子块 ID 不同，相同父上下文也不能重复计分。
+            // 按父上下文去重后计分。
             String contextKey =
                 chunk.getDocId()
                     + ":"
@@ -132,7 +149,7 @@ public class RetrievalEvaluator {
                 .map(Evidence::id)
                 .filter(id -> !matched.contains(id))
                 .toList();
-        // 准确率以请求的 K 为分母，避免少量结果被误报为满分。
+        // Precision以请求的K为分母。
         double precision = (double) relevantCount / k;
         Metrics metrics;
         if (sample.expectEmpty()) {

@@ -53,6 +53,12 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         setSortByPosition(true);
     }
 
+    /**
+     * 读取文本型PDF的字位布局，输出包含原子课程记录的正文和逐页复核信息。
+     *
+     * @param path 待解析的本地PDF路径
+     * @return 提取正文、页数、检测及通过校验的课程行数和问题列表
+     */
     public static Result extract(Path path) throws IOException {
         try (PDDocument document = PDDocument.load(path.toFile())) {
             var extractor = new PdfLayoutTextExtractor();
@@ -69,6 +75,11 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         }
     }
 
+    /**
+     * 清空当前页字位；仅在页面宽度兼容时沿用表头列布局，课程字段值不跨页拼接。
+     *
+     * @param page PDFBox当前开始处理的页面
+     */
     @Override
     protected void startPage(PDPage page) throws IOException {
         super.startPage(page);
@@ -82,11 +93,22 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         pages++;
     }
 
+    /**
+     * 收集当前页带坐标的字位，延后到页末统一重建视觉行和课程字段。
+     *
+     * @param text   PDFBox给出的文本片段，本方法以字位列表为解析依据
+     * @param glyphs 包含字符、横纵坐标与宽度的字位列表
+     */
     @Override
     protected void writeString(String text, List<TextPosition> glyphs) {
         positions.addAll(glyphs);
     }
 
+    /**
+     * 根据表头坐标定位课程列，以课程号为行锚点聚合名称换行，校验数值并保留原始行；存在歧义的记录标记为待复核。
+     *
+     * @param page 字位收集完成、准备输出正文的当前页面
+     */
     @Override
     protected void endPage(PDPage page) throws IOException {
         List<Line> lines = lines(positions);
@@ -153,6 +175,7 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
             int previous = anchorNumber - 1, next = anchorNumber + 1;
             float top = anchor.y() - 12;
             float bottom = anchor.y() + 32;
+            // 以相邻课程锚点收紧名称换行区域，减少将上一门或下一门课程拼入当前记录。
             if (previous >= 0) {
                 top = Math.max(top, (lines.get(anchors.get(previous)).y() + anchor.y()) / 2);
             }
@@ -177,6 +200,7 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
                     name.append(part);
                 }
             }
+            // 数值字段只读当前锚点行的对应列，不用邻行字段填补缺失值。
             String credits = cell(anchor.glyphs(), schema.credits(), schema.year());
             String year = cell(anchor.glyphs(), schema.year(), schema.semester());
             String semester = cell(anchor.glyphs(), schema.semester(), schema.afterSemester());
@@ -264,6 +288,12 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         super.endPage(page);
     }
 
+    /**
+     * 按纵坐标容差聚合视觉行，再按横坐标排列每行字符，以恢复页面阅读顺序。
+     *
+     * @param glyphs 当前页面收集到的原始字位
+     * @return 按纵坐标排列且行内按横坐标排序的视觉行
+     */
     private static List<Line> lines(List<TextPosition> glyphs) {
         List<TextPosition> sorted =
             glyphs.stream()
@@ -282,6 +312,12 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         return result;
     }
 
+    /**
+     * 识别中英文课程表头并验证列坐标顺序，只在必要列完整时生成布局。
+     *
+     * @param line 可能包含课程列名称的视觉行
+     * @return 可信的列边界布局，无法确认表头时返回 {@code null}
+     */
     private static Header header(Line line) {
         List<TextPosition> glyphs = line.glyphs();
         String text = cell(glyphs, 0, Float.MAX_VALUE);
@@ -325,6 +361,14 @@ public final class PdfLayoutTextExtractor extends PDFTextStripper {
         return locate(glyphs, label, true);
     }
 
+    /**
+     * 将去空白后的标签字符映射回原始字位，定位标签开始或结束的横坐标。
+     *
+     * @param glyphs 表头或文本行的字位列表
+     * @param label  需要查找的连续标签文本
+     * @param end    是否返回标签末字符的右边界，而非首字符左边界
+     * @return 标签对应的横坐标，未找到标签时返回 {@code null}
+     */
     private static Float locate(List<TextPosition> glyphs, String label, boolean end) {
         StringBuilder text = new StringBuilder();
         List<TextPosition> chars = new ArrayList<>();

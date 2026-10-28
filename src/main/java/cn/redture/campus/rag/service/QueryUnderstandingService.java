@@ -22,7 +22,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 通用语义规划只调用一次模型；不能解析时降级为无业务过滤的原问题检索。
+ * 生成语义查询计划，并在调用或解析失败时回退原问题检索。
  */
 @Service
 public class QueryUnderstandingService {
@@ -43,6 +43,13 @@ public class QueryUnderstandingService {
         executor.shutdownNow();
     }
 
+    /**
+     * 使用同一次模型调用生成领域、任务、检索表达及结构化条件；调用或解析失败时退回原问题通用检索，取消信号继续向上传播。
+     *
+     * @param request 包含当前原问题、请求范围和已确认上下文的请求
+     * @param catalog 用于规范专业名称和识别适用文档的有效培养方案目录
+     * @return 正常语义计划或标记为降级的通用检索计划
+     */
     public QueryIntent understand(RagAskRequestDTO request, List<CurriculumDocument> catalog) {
         if (!properties.getRetrieval().isSemanticAcademicIntentEnabled()) {
             return QueryIntent.search(request.getQuestion());
@@ -87,11 +94,18 @@ public class QueryUnderstandingService {
             Thread.currentThread().interrupt();
             throw new java.util.concurrent.CancellationException("问题理解被取消");
         } catch (Exception unavailable) {
-            // 领域识别失败不等于资料不存在；后续仍执行原问题检索并记录降级状态。
+            // 规划失败时按原问题检索，并记录降级状态。
             return QueryIntent.search(request.getQuestion());
         }
     }
 
+    /**
+     * 解析模型JSON并合并有文本依据的本轮条件与已确认上下文；普通检索任务不继承课程限制，毕业届别不推算为入学年。
+     *
+     * @param request 提供原文片段校验和已确认范围的请求
+     * @param value   模型输出的JSON对象
+     * @return 包含条件来源、检索表达和课程实体的结构化计划
+     */
     QueryIntent parse(RagAskRequestDTO request, JsonNode value) {
         Task task = Task.valueOf(value.path("task").asText());
         String query = text(value, "searchQuery");
@@ -115,6 +129,7 @@ public class QueryUnderstandingService {
             hypothetical = null;
         }
         if (task == Task.SEARCH) {
+            // 普通检索计划使用独立问题和通用检索范围。
             return new QueryIntent(query, domain == null ? "general" : domain, task, List.of(), List.of(), null, null, "ALL", false, false, List.copyOf(alternatives), hypothetical);
         }
         var targets = new ArrayList<AcademicTarget>();
@@ -173,6 +188,12 @@ public class QueryUnderstandingService {
         return new QueryIntent(query, "curriculum", task, List.copyOf(targets), courseNames.stream().distinct().toList(), study, semester, nature, value.path("countCourses").asBoolean(false), false, List.copyOf(alternatives), hypothetical);
     }
 
+    /**
+     * 在受并发容量限制的虚拟线程中调用理解模型，按配置等待并在退出时取消尚未结束的任务。
+     *
+     * @param prompt 包含任务契约、目录及有界上下文的理解提示
+     * @return 模型返回的原始文本，尚未进行JSON解析
+     */
     private String interpret(String prompt) throws Exception {
         var task = executor.submit(() -> {
             if (!capacity.tryAcquire()) {

@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
- * 完整课程清单不能依赖相似度检索的前 K 条样本生成。
+ * 基于完整课程记录生成课程清单和统计结果。
  */
 public final class CourseSchedule {
     private CourseSchedule() {
@@ -17,7 +17,15 @@ public final class CourseSchedule {
     }
 
     /**
-     * 学年、学期和课程性质已由语义计划提供；完整清单只解析一次课程行。
+     * 在选定培养方案的全部课程行中筛选学年、学期和性质，统计课程并映射去重后的父来源。
+     *
+     * @param enrollment   已选培养方案的入学年份
+     * @param studyYear    相对修读学年，为 {@code null} 时覆盖全部学年
+     * @param semester     学期一或二，为 {@code null} 时覆盖两个学期
+     * @param nature       课程性质条件：ALL、REQUIRED或ELECTIVE
+     * @param countCourses 是否追加课程门数与个人欠课数不同的统计说明
+     * @param rows         选定文档的完整课程记录
+     * @return 完整清单或拒答说明，以及与正文编号对应的去重来源
      */
     public static Result answer(
         int enrollment,
@@ -39,6 +47,7 @@ public final class CourseSchedule {
                 .count();
         var sources = new ArrayList<RetrievedChunk>();
         var sourcePositions = new HashMap<String, Integer>();
+        // 原事实编号指向输入记录；父上下文去重后必须映射为最终来源列表中的编号。
         var citations = new HashMap<Integer, Integer>();
         for (var fact : scoped) {
             if (!matchesNature(fact, nature) && knownNature(fact)) {
@@ -64,6 +73,7 @@ public final class CourseSchedule {
                     + "的课程安排。",
                 List.of());
         }
+        // 同一课程可能由多个子块命中同一父文，按课程号与修读时间去重后再统计。
         var facts = new LinkedHashMap<String, CourseEvidence.Fact>();
         scoped.stream()
             .filter(f -> matchesNature(f, nature))

@@ -25,6 +25,12 @@ public class QwenEmbeddingService {
         this.properties = properties;
     }
 
+    /**
+     * 为非空检索文本生成查询向量并校验维度与当前配置一致。
+     *
+     * @param text 用于向量召回的检索文本
+     * @return 维度已校验的查询向量
+     */
     public float[] embedQuery(String text) {
         if (!StringUtils.hasText(text)) {
             throw new IllegalArgumentException("Embedding query cannot be blank");
@@ -32,6 +38,12 @@ public class QwenEmbeddingService {
         return validateDimension(embeddingModel().embed(text).content().vector());
     }
 
+    /**
+     * 去除空白文本后按剩余顺序批量生成子块向量；调用方应预先过滤输入并核对向量数量。
+     *
+     * @param texts 待生成向量的子块正文列表
+     * @return 与有效文本顺序一致的向量列表，有效文本为空时返回空列表
+     */
     public List<float[]> embedDocuments(List<String> texts) {
         List<String> validTexts =
             texts == null
@@ -51,6 +63,12 @@ public class QwenEmbeddingService {
         return embeddingModelProvider.getObject();
     }
 
+    /**
+     * 校验模型返回的向量长度与配置维度一致。
+     *
+     * @param vector 模型返回的待校验向量
+     * @return 校验通过的原向量对象
+     */
     private float[] validateDimension(float[] vector) {
         int expected = properties.getQwen().getEmbeddingDimension();
         if (vector == null || vector.length != expected) {

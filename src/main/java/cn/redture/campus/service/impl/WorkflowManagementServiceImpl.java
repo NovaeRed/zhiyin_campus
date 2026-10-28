@@ -62,6 +62,13 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
         return workflowManagementMapper.selectUsers(size, (page - 1) * size);
     }
 
+    /**
+     * 在管理变更锁和用户行锁内修改角色或启停状态，复核操作者权限并保护自身管理账号，最后记录审计。
+     *
+     * @param id      需要修改的目标用户标识
+     * @param role    新角色，为 {@code null} 时保持原角色
+     * @param enabled 新启停状态，为 {@code null} 时保持原状态
+     */
     @Transactional
     @Override
     public void updateUser(long id, String role, Boolean enabled) {
@@ -115,6 +122,17 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
             user.getId(), user.getStudentNo(), major.trim(), grade, cohort);
     }
 
+    /**
+     * 锁定当前用户的会话并拒绝运行中修改；可更新标题、归档状态，并按显式标记整体替换会话范围。
+     *
+     * @param id       当前用户拥有的会话标识
+     * @param title    新标题，为 {@code null} 时不修改
+     * @param archived 新归档状态，为 {@code null} 时不修改
+     * @param major    替换范围时使用的专业，可为空
+     * @param grade    替换范围时使用的入学年份，可为空
+     * @param cohort   替换范围时使用的毕业届别，可为空
+     * @param setScope 是否整体替换范围；为真且所有范围字段为空时清空原范围
+     */
     @Transactional
     @Override
     public void session(
@@ -152,6 +170,12 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
         }
     }
 
+    /**
+     * 对用户选择的会话去重并锁定，确认全部归属和无运行请求后执行逻辑删除并审计；不删除知识文档。
+     *
+     * @param ids 当前用户要求删除的会话标识，最多一百项
+     * @return 本次实际逻辑删除的会话数量
+     */
     @Transactional
     @Override
     public int deleteSessions(List<Long> ids) {
@@ -163,7 +187,7 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
             invalid();
         }
         var unique = new TreeSet<>(ids);
-        // 与请求声明和会话更新使用相同行锁，防止检查空闲后、删除前插入新问题。
+        // 与请求声明、会话更新共用会话行锁，串行化空闲检查和删除操作。
         var sessions = workflowManagementMapper.lockSessions(user, unique);
         if (sessions.size() != unique.size()) {
             missing();
@@ -217,6 +241,13 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
         return workflowManagementMapper.selectAudits(size, (page - 1) * size);
     }
 
+    /**
+     * 在文档锁内更新标题和版本，并同步文档及子块的范围元数据。
+     *
+     * @param id      需要编辑的文档标识
+     * @param title   新的非空文档标题
+     * @param version 新的非空文档版本号
+     */
     @Transactional
     @Override
     public void editDocument(long id, String title, String version) {
@@ -224,6 +255,12 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
             id, new cn.redture.campus.pojo.dto.DocumentEditRequestDTO(title, version, null));
     }
 
+    /**
+     * 在文档锁内更新标题和版本，并同步文档及子块的范围元数据。
+     *
+     * @param id      需要编辑的文档标识
+     * @param request 包含标题、版本及可选范围元数据的完整编辑请求
+     */
     @Transactional
     @Override
     public void editDocument(long id, cn.redture.campus.pojo.dto.DocumentEditRequestDTO request) {
@@ -267,7 +304,7 @@ public class WorkflowManagementServiceImpl implements WorkflowManagementService 
             patch.put(
                 "effective_date",
                 meta.effectiveDate() == null ? null : meta.effectiveDate().toString());
-            // 全局忽略空值的序列化配置不能抹去显式清空检索范围的字段。
+            // 使用JSON空节点保留需要显式清空的范围字段。
             var patchNode = json.createObjectNode();
             patch.forEach(
                 (key, value) ->

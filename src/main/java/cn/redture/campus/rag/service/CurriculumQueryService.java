@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * 培养方案专用执行器；只消费结构化条件，不再次解释自然语言。
+ * 按结构化条件执行培养方案查询与多版本对比。
  */
 @Service
 public class CurriculumQueryService {
@@ -26,6 +26,13 @@ public class CurriculumQueryService {
     public record Result(String answer, List<RetrievedChunk> sources) {
     }
 
+    /**
+     * 按专业、入学年份和毕业届别匹配有效培养方案目录。
+     *
+     * @param target  已解析的单一学业范围
+     * @param catalog 当前有效培养方案目录
+     * @return 满足显式范围的文档列表，未找到时为空
+     */
     public List<CurriculumDocument> candidates(QueryIntent.AcademicTarget target, List<CurriculumDocument> catalog) {
         return catalog.stream()
             .filter(d -> target.major() == null || target.major().equals(CurriculumMetadata.majorOf(d)))
@@ -34,6 +41,13 @@ public class CurriculumQueryService {
             .toList();
     }
 
+    /**
+     * 对课程清单或比较任务逐范围选择唯一方案并读取全量课程记录；缺必要条件时澄清，多版本结果合并时重编号引用。
+     *
+     * @param plan    包含一个或多个课程查询范围的语义计划
+     * @param catalog 供版本选择使用的有效培养方案目录
+     * @return 完整课程结果、澄清或拒答文本及对应真实来源
+     */
     public Result execute(QueryIntent plan, List<CurriculumDocument> catalog) {
         var sources = new ArrayList<RetrievedChunk>();
         var answers = new ArrayList<String>();

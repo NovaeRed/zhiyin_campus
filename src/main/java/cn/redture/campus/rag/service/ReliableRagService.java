@@ -28,7 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 模型调用前先提交持久化请求声明，失败的请求不隐式重放。
+ * 管理问答请求声明、状态流转、会话上下文和完成结果重放。
  */
 @Service
 public class ReliableRagService {
@@ -61,6 +61,12 @@ public class ReliableRagService {
         UUID id, Long session, KnowledgeRepository.QueryRecord query, String cached) {
     }
 
+    /**
+     * 以用户和请求键原子声明执行权，处理指纹冲突或完成重放；新请求在补全上下文后执行问答，并仅在运行态发布结果。
+     *
+     * @param input 未经会话补全的原始请求，其字段用于计算幂等指纹
+     * @return 已完成请求的缓存结果，或本次成功发布的回答
+     */
     public RagAnswerResponseVO ask(RagAskRequestDTO input) {
         long user = SecurityContextHolderUtil.getUserId();
         accounts.requireActive(user);
@@ -74,6 +80,7 @@ public class ReliableRagService {
         if (!key.matches("[A-Za-z0-9._:-]{1,128}")) {
             bad("INVALID_REQUEST_ID", "requestId格式不合法");
         }
+        // 指纹只使用调用方原始参数；补全会话范围后再计算会使同一请求的重试发生冲突。
         String fingerprint =
             hash(
                 write(
@@ -120,6 +127,7 @@ public class ReliableRagService {
                             "请求已在处理或终止；不会自动重复执行模型调用，请查询请求状态");
                     }
                     Long session = repository.ensureSession(user, input.getSessionId());
+                    // 事务锁只保护检查与声明；事务结束后由持久化的运行状态阻止同会话并发。
                     reliableRagMapper.lockSession(session);
                     if (Boolean.TRUE.equals(reliableRagMapper.hasRunningRequest(session))) {
                         conflict("SESSION_BUSY", "该会话已有问题正在处理，请稍后再试");
@@ -142,6 +150,7 @@ public class ReliableRagService {
             accounts.requireActive(user);
             tx.executeWithoutResult(
                 status -> {
+                    // 通过运行态条件更新竞争完成状态，决定本次回答是否可以发布。
                     int updated =
                         reliableRagMapper.completeRequest(write(response), claim.id());
                     if (updated != 1) {
@@ -168,6 +177,14 @@ public class ReliableRagService {
         }
     }
 
+    /**
+     * 复制原始请求，用会话范围和用户画像补足缺失条件，并装配最近三条已完成问答的有界历史。
+     *
+     * @param user    当前已验证的用户标识
+     * @param session 已验证归属的会话标识
+     * @param input   保留原问题和显式范围的原始请求
+     * @return 供本次语义规划使用的独立请求副本
+     */
     @SuppressWarnings("unchecked")
     private RagAskRequestDTO contextualize(long user, long session, RagAskRequestDTO input) {
         var request = new RagAskRequestDTO();
@@ -200,7 +217,7 @@ public class ReliableRagService {
         request.setConversationDomain((String) scope.get("domain"));
         var turns = reliableRagMapper.selectRecentTurns(session, user);
         Collections.reverse(turns);
-        // 限制每轮历史长度，避免长课程清单挤掉最新的追问上下文。
+        // 分别限制问题、检索表达和回答长度，再组合最近几轮历史。
         var boundedTurns = new ArrayList<Map<String, String>>();
         for (var turn : turns) {
             boundedTurns.add(
@@ -234,11 +251,19 @@ public class ReliableRagService {
         return text.substring(0, Math.min(text.length(), maximum));
     }
 
+    /**
+     * 在结果发布事务中保存本次计划和领域；仅单一课程范围保留课程条件，切换主题时不沿用旧课程范围。
+     *
+     * @param session  需要更新上下文的会话标识
+     * @param request  带有本次语义计划的执行请求
+     * @param response 已生成并准备发布的回答；当前上下文写入以请求中的计划为准
+     */
     private void saveContext(long session, RagAskRequestDTO request, RagAnswerResponseVO response) {
         var plan = request.getQueryIntent();
         if (plan == null) {
             return;
         }
+        // 按新计划重建会话上下文，仅为单一课程范围保留学业条件。
         var context = new LinkedHashMap<String, Object>();
         context.put("domain", plan.domain());
         context.put("lastQuestion", request.getQuestion());
@@ -266,6 +291,12 @@ public class ReliableRagService {
         reliableRagMapper.updateScope(write(context), session);
     }
 
+    /**
+     * 按当前用户及请求键读取可见请求状态，已保存的JSON回答转换为可直接返回的结构。
+     *
+     * @param key 用户级幂等请求键
+     * @return 请求状态、关联会话与查询标识及可选已完成回答
+     */
     public Map<String, Object> status(String key) {
         var rows = reliableRagMapper.selectStatus(SecurityContextHolderUtil.getUserId(), key);
         if (rows.isEmpty()) {
@@ -278,6 +309,11 @@ public class ReliableRagService {
         return result;
     }
 
+    /**
+     * 将当前用户的运行请求及关联查询标为取消，并中断本实例对应的执行线程。
+     *
+     * @param key 需要取消的用户级幂等请求键
+     */
     @org.springframework.transaction.annotation.Transactional
     public void cancel(String key) {
         long user = SecurityContextHolderUtil.getUserId();
@@ -287,7 +323,7 @@ public class ReliableRagService {
             return;
         }
         var row = rows.getFirst();
-        // 请求可能尚未关联查询；保持原 JDBC 对空查询 ID 不执行更新的行为。
+        // 请求已关联查询时，同步更新查询的取消状态。
         if (row.get("query_id") instanceof Number queryId) {
             reliableRagMapper.cancelQuery(queryId.longValue());
         }
@@ -297,6 +333,9 @@ public class ReliableRagService {
         }
     }
 
+    /**
+     * 定期为本实例活跃请求续租，终止超时线程，并将租约过期请求标为失败。
+     */
     @Scheduled(fixedDelay = 10000)
     public void heartbeat() {
         for (var id : active.keySet()) {
@@ -343,6 +382,12 @@ public class ReliableRagService {
         }
     }
 
+    /**
+     * 对固定顺序序列化的原请求内容计算SHA-256，供同键异参冲突检测使用。
+     *
+     * @param value 尚未补全会话上下文的请求字段序列化文本
+     * @return 十六进制SHA-256请求指纹
+     */
     private String hash(String value) {
         try {
             return HexFormat.of()

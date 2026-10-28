@@ -21,6 +21,12 @@ public final class TableRowBlocks {
     public record Piece(String text, boolean table) {
     }
 
+    /**
+     * 将完整课程行标记区块作为不可分割片段，与相邻普通正文按原始顺序拆开。
+     *
+     * @param text 可能同时包含普通正文和课程行标记的文本
+     * @return 正文片段及其是否属于原子表格记录的标记
+     */
     public static List<Piece> pieces(String text) {
         List<Piece> pieces = new ArrayList<>();
         var matcher = ROW.matcher(text);
@@ -42,6 +48,12 @@ public final class TableRowBlocks {
         return ROW.matcher(text).find();
     }
 
+    /**
+     * 从首个完整课程行标记中读取页码、行号及校验信息，供切片来源追踪使用。
+     *
+     * @param text 可能包含课程行标记的切片正文
+     * @return 课程行来源与校验元数据；未找到完整标记时返回空映射
+     */
     public static Map<String, Object> metadata(String text) {
         var matcher = ROW.matcher(text);
         if (!matcher.find()) {

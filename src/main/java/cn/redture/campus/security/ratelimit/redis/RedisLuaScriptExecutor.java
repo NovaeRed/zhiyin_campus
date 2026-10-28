@@ -25,6 +25,18 @@ public class RedisLuaScriptExecutor {
         this.tokenBucketScript.setResultType(List.class);
     }
 
+    /**
+     * 执行单个桶键的Lua原子操作并规范化返回值；脚本结果缺失时返回保守的拒绝结果。
+     *
+     * @param key                 需要更新的Redis令牌桶键
+     * @param nowMs               当前时间戳，单位毫秒
+     * @param capacityScaled      放大后的桶容量
+     * @param refillTokensScaled  每周期放大后的补充量
+     * @param refillPeriodMs      补充周期，单位毫秒
+     * @param requestTokensScaled 本次请求需要消耗的放大令牌量
+     * @param ttlMs               桶状态过期时间，单位毫秒
+     * @return 依次为是否放行、剩余完整令牌数、建议重试秒数的三项结果
+     */
     public List<Long> executeTokenBucket(
         String key,
         long nowMs,

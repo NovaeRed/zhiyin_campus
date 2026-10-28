@@ -28,6 +28,15 @@ public class DocumentTextExtractor {
     public record Extraction(String text, Map<String, Object> metadata) {
     }
 
+    /**
+     * 按文件类型读取正文；PDF使用坐标解析并返回复核信息，文本按UTF-8读取，其他支持格式交给Tika提取正文。
+     *
+     * @param path             已保存的本地原文路径
+     * @param originalFilename 用于格式识别的原始文件名
+     * @param contentType      上传时的媒体类型，可为空
+     * @param fileType         已校验的小写文件扩展名
+     * @return 完整提取正文及提取器、课程行校验和人工复核元数据
+     */
     public Extraction extractDetailed(
         Path path, String originalFilename, String contentType, String fileType) {
         try {
