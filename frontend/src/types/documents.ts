@@ -1,1 +1,10 @@
-export interface DocumentValues { title: string; version: string; strategy?: string; targetMajor?: string; targetGrade?: number | null; targetCohort?: string; department?: string; effectiveDate?: string }
+export interface DocumentValues {
+  title: string;
+  version: string;
+  strategy?: string;
+  targetMajor?: string;
+  targetGrade?: number | null;
+  targetCohort?: string;
+  department?: string;
+  effectiveDate?: string;
+}
