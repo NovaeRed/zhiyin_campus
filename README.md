@@ -164,7 +164,7 @@ cd zhiyin_campus
 
 ### 2. 准备数据库与 Redis
 
-在独立开发数据库中，先由有权限的数据库维护者启用扩展并初始化 [基础结构](doc/zhiyin_campus.sql)，再应用 [工作流增量结构](doc/migrations/20261023_backend_workflows.sql)。已有数据环境应先核对当前结构与增量内容，不要重复执行整库初始化。
+在独立开发数据库中，由有权限的数据库维护者执行 [完整初始化结构](doc/zhi_yin.sql)，其中已包含工作流表、字段和索引。已有数据环境不要重复执行整库初始化。
 
 业务表主要包括用户/画像、知识文档/切片、会话/查询、检索/生成追踪，以及请求、入库任务、反馈和审计表。当前向量列为 `vector(1024)`；更换嵌入模型需要同时评估历史向量与索引，不能只改模型名称。
 
@@ -272,8 +272,7 @@ src/main/resources/
   rag/                           专业词表与简称
   lua/                           入口限流脚本
 doc/
-  zhiyin_campus.sql               基础表结构
-  migrations/                    增量迁移
+  zhi_yin.sql                     完整初始化表结构
   images/readme/                 仅含虚构数据的界面截图
 pom.xml                          Java 依赖与构建配置
 ```

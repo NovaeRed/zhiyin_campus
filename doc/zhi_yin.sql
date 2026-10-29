@@ -1,3 +1,5 @@
+-- 知引校园完整数据库初始化结构，仅用于空数据库或独立测试 schema。
+
 -- ==========================================
 -- 0. 基础扩展与全局设置
 -- ==========================================
@@ -35,6 +37,7 @@ CREATE TABLE student_profiles
     major              VARCHAR(100)       NOT NULL,
     grade              INT                NOT NULL, -- 入学年份
     curriculum_version VARCHAR(32),
+    target_cohort      VARCHAR(16),
     credits_completed  DECIMAL(4, 1) DEFAULT 0.0,
     gpa                DECIMAL(3, 2),
     interest_tags      JSONB         DEFAULT '[]',
@@ -146,6 +149,9 @@ CREATE TABLE rag_sessions
 (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT REFERENCES users (id) ON DELETE SET NULL,
+    title      VARCHAR(120),
+    archived   BOOLEAN NOT NULL DEFAULT false,
+    target_scope JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -158,6 +164,8 @@ CREATE TABLE rag_queries
     trace_id         VARCHAR(64) UNIQUE NOT NULL DEFAULT gen_random_uuid(),
     original_query   TEXT               NOT NULL,
     rewritten_query  TEXT,
+    error_code       VARCHAR(64),
+    failure_stage    VARCHAR(64),
     intent_category  VARCHAR(50),
     workflow_state   VARCHAR(30)                 DEFAULT 'pending',
     final_confidence DECIMAL(3, 2),
@@ -286,3 +294,36 @@ VALUES ('top_k_default', '{
 
 -- 分析统计信息（生产入库后执行）
 -- ANALYZE users, student_profiles, knowledge_docs, doc_chunks, rag_sessions, rag_queries;
+
+-- ==========================================
+-- 7. 可靠问答、文档任务、操作审计与问答反馈
+-- ==========================================
+CREATE TABLE app_rag_requests (
+ id uuid PRIMARY KEY, user_id bigint NOT NULL REFERENCES users(id), request_key varchar(128) NOT NULL,
+ request_hash varchar(64) NOT NULL, session_id bigint REFERENCES rag_sessions(id), query_id bigint REFERENCES rag_queries(id),
+ state varchar(20) NOT NULL CHECK(state IN ('running','completed','failed','cancelled')),
+ response jsonb, error_code varchar(64), instance_id uuid NOT NULL,
+ lease_until timestamptz NOT NULL DEFAULT now()+interval '2 minutes',
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(user_id,request_key)
+);
+CREATE INDEX app_rag_requests_lease ON app_rag_requests(state,lease_until);
+CREATE TABLE app_ingestion_jobs (
+ id uuid PRIMARY KEY, user_id bigint NOT NULL REFERENCES users(id), source_path text NOT NULL,
+ original_name varchar(255) NOT NULL, request jsonb NOT NULL,
+ state varchar(20) NOT NULL CHECK(state IN ('queued','processing','completed','failed','cancelled')),
+ phase varchar(40) NOT NULL DEFAULT 'queued', progress integer NOT NULL DEFAULT 0 CHECK(progress BETWEEN 0 AND 100),
+ attempt integer NOT NULL DEFAULT 0, result jsonb, error_code varchar(64), rebuild_of bigint REFERENCES knowledge_docs(id),
+ instance_id uuid, lease_until timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX app_ingestion_jobs_queue ON app_ingestion_jobs(state,created_at);
+CREATE TABLE app_audit_events (
+ id bigserial PRIMARY KEY, actor_id bigint REFERENCES users(id), action varchar(64) NOT NULL,
+ object_type varchar(40) NOT NULL, object_id varchar(64), detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE app_rag_feedback (
+ id bigserial PRIMARY KEY, query_id bigint NOT NULL REFERENCES rag_queries(id), user_id bigint NOT NULL REFERENCES users(id),
+ rating integer NOT NULL CHECK(rating IN (-1,1)), comment varchar(2000) NOT NULL DEFAULT '',
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(query_id,user_id)
+);

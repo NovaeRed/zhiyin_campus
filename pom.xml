@@ -272,7 +272,7 @@
                 <configuration>
                     <failIfNoTests>true</failIfNoTests>
                     <systemPropertyVariables>
-                        <rag.test.schema>${project.basedir}/doc/zhiyin_campus.sql</rag.test.schema>
+                        <rag.test.schema>${project.basedir}/doc/zhi_yin.sql</rag.test.schema>
                     </systemPropertyVariables>
                     <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                 </configuration>

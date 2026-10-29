@@ -66,6 +66,5 @@ src/main/resources/application-local.yml
 /src/test/
 /scripts/
 /doc/evaluation/
-/doc/pgvector-test-report.md
 /logs/
 /AGENTS.md
